@@ -1,0 +1,12 @@
+server:
+  port: 8007
+
+spring:
+  application:
+    name: go-share-assistant-server
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

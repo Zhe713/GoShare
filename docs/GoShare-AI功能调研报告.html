@@ -1,0 +1,570 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0">
+<title>GoShare AI 功能扩展调研报告</title>
+<style>
+:root{
+  --green:#0B3D2E; --accent:#12855C; --amber:#C8892A;
+  --ink:#1B2422; --bg:#F6F8F5; --line:#DCE3DC;
+}
+*{box-sizing:border-box;}
+html,body{margin:0;padding:0;}
+body{
+  background:var(--bg); color:var(--ink);
+  font-family:-apple-system,"Segoe UI","PingFang SC","Microsoft YaHei",sans-serif;
+  font-size:15px; line-height:1.6;
+}
+.wrap{max-width:1180px;margin:0 auto;padding:24px 20px 60px;}
+h1{font-size:26px;color:var(--green);margin:0 0 4px;}
+.sub{color:#55605A;font-size:13px;margin-bottom:18px;}
+h2{font-size:20px;color:var(--green);border-left:4px solid var(--accent);padding-left:10px;margin:38px 0 14px;}
+h3{font-size:16px;margin:0 0 8px;color:var(--green);}
+.mono{font-family:ui-monospace,Consolas,monospace;}
+.lead{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px 22px;box-shadow:0 1px 3px rgba(11,61,46,.06);}
+.lead p{margin:8px 0;}
+.pick{background:var(--green);color:#fff;border-radius:8px;padding:10px 16px;margin:12px 0;font-size:16px;}
+.pick b{color:#FFD98A;}
+.badges{margin:6px 0 2px;}
+.badge{display:inline-block;font-size:12px;padding:1px 8px;border-radius:9px;border:1px solid;margin:0 4px 3px 0;white-space:nowrap;}
+.b-real{background:#E6F4EC;color:#0B3D2E;border-color:#12855C;}
+.b-doc{background:#E8F0FE;color:#1A56DB;border-color:#1A56DB;}
+.b-comm{background:#EFEFED;color:#55605A;border-color:#9AA39D;}
+.b-os{background:#E0F2F1;color:#0F5E63;border-color:#0E7C86;}
+.b-infer{background:#FBF1E0;color:#8A5A12;border-color:#C8892A;}
+/* 对比表 */
+.table-outer{position:relative;}
+.table-outer::after{content:"";position:absolute;top:0;right:0;width:48px;height:100%;background:linear-gradient(to left, rgba(11,61,46,.22), rgba(11,61,46,0));pointer-events:none;z-index:5;}
+.table-wrap{overflow-x:auto;border:1px solid var(--line);border-radius:8px;background:#fff;}
+.table-hint{font-size:12.5px;color:#55605A;margin:0 0 10px;}
+a.cardsrc{white-space:nowrap;font-size:12px;}
+table.cmp{border-collapse:separate;border-spacing:0;font-size:13.5px;min-width:1480px;width:100%;}
+table.cmp th,table.cmp td{border-bottom:1px solid var(--line);border-right:1px solid var(--line);padding:8px 10px;vertical-align:top;text-align:left;line-height:1.55;}
+table.cmp thead th{position:sticky;top:0;background:var(--green);color:#fff;z-index:3;font-size:13px;white-space:nowrap;}
+table.cmp th:first-child,table.cmp td:first-child{position:sticky;left:0;z-index:2;min-width:150px;max-width:150px;background:#F2F6F2;}
+table.cmp thead th:first-child{z-index:4;background:var(--green);}
+table.cmp td:first-child{font-weight:600;color:var(--green);}
+.stars{color:var(--amber);font-family:ui-monospace,Consolas,monospace;white-space:nowrap;}
+.only-infer{display:inline-block;font-size:11px;color:#8A5A12;border:1px dashed #C8892A;border-radius:6px;padding:0 5px;margin-top:4px;}
+/* 卡片 */
+.card{background:#fff;border:1px solid var(--line);border-radius:10px;padding:18px 22px;margin:14px 0;box-shadow:0 1px 3px rgba(11,61,46,.06);}
+.card .head{display:flex;flex-wrap:wrap;align-items:baseline;gap:8px;}
+.card .stars-h{font-size:14px;}
+.kv{margin:8px 0;}
+.kv b{color:var(--green);}
+.src{font-size:12.5px;color:#44504A;margin-top:10px;}
+.src ul{margin:4px 0;padding-left:18px;}
+.src li{margin:3px 0;word-break:break-all;}
+a{color:#1A56DB;word-break:break-all;}
+.note-small{font-size:12px;color:#8A5A12;}
+/* 组合 */
+.combo{background:#fff;border:1px solid var(--line);border-top:4px solid var(--accent);border-radius:10px;padding:18px 22px;margin:16px 0;box-shadow:0 1px 3px rgba(11,61,46,.06);}
+.combo .total{color:var(--amber);font-weight:600;}
+ul{margin:6px 0;padding-left:20px;}
+li{margin:3px 0;}
+.legend span{display:inline-block;margin:2px 14px 2px 0;}
+.excl{background:#fff;border:1px solid var(--line);border-left:4px solid var(--amber);border-radius:8px;padding:12px 18px;margin:10px 0;}
+@media print{
+  body{background:#fff;font-size:12px;}
+  .table-outer::after{display:none;}
+  .table-wrap{overflow:visible;border:none;}
+  table.cmp{min-width:0;font-size:11px;table-layout:fixed;width:100%;}
+  table.cmp th:nth-child(1){width:7%;}
+  table.cmp th:nth-child(2){width:10%;}
+  table.cmp th:nth-child(3){width:14%;}
+  table.cmp th:nth-child(4){width:15%;}
+  table.cmp th:nth-child(5){width:9%;}
+  table.cmp th:nth-child(6){width:6%;}
+  table.cmp th:nth-child(7){width:9%;}
+  table.cmp th:nth-child(8){width:14%;}
+  table.cmp th:nth-child(9){width:8%;}
+  table.cmp th:nth-child(10){width:8%;}
+  table.cmp th:nth-child(9),table.cmp td:nth-child(9){white-space:nowrap;font-size:10px;letter-spacing:0;}
+  table.cmp th:nth-child(10),table.cmp td:nth-child(10){white-space:nowrap;font-size:10px;}
+  .cmp td{word-break:normal;overflow-wrap:anywhere;}
+  table.cmp thead th{white-space:normal;}
+  .cmp .srclinks{display:none;}
+  table.cmp thead th,table.cmp th:first-child,table.cmp td:first-child{position:static;background:var(--green) !important;color:#fff;}
+  table.cmp td:first-child{color:#fff;}
+  .card,.lead,.combo,.excl{box-shadow:none;break-inside:avoid;}
+}
+</style>
+</head>
+<body>
+<div class="wrap">
+
+<h1>GoShare AI 功能扩展调研报告</h1>
+<div class="sub">个人求职项目（不上线，答辩靠演示与讲述）｜调研日期 2026-10-28｜候选共 10 个（A1–A5 交易体验侧，B1–B5 服务质量侧）</div>
+
+<!-- ============ 1 结论 + 组合速览 ============ -->
+<h2>一、一句话结论与推荐组合速览</h2>
+<div class="lead">
+  <div class="pick">主推 <b>A1 语义化行程搜索与智能撮合</b> ＋ <b>B1 客服工单智能分派+会话摘要+回复草稿</b> ＋ <b>A2 智能取消挽留与退改费用解释</b>，合计约 <b>8–12 人日</b>。</div>
+  <p><b>为什么是这三个：</b></p>
+  <ul>
+    <li><b>A1</b> 踩在行业热点上——哈啰 2026 年 4 月刚把撮合能力 MCP 化开放给 AI 模型，答辩可说"行业在做的就是我在项目里做轻量复刻的东西"；NL→结构化抽取、ES 动态 DSL、两阶段召回排序，后端考点与测开评估集两边都饱满。</li>
+    <li><b>B1</b> 工程密度最高——消费现有"转人工队列"事件走 RocketMQ 异步，配 Sentinel 限流降级、LLM 成本控制与全链可观测，且全部落在管理后台，不干扰前台演示。</li>
+    <li><b>A2</b> 演示最直观（用户说"不去了"，助手先算钱再给替代方案），且是全组边界用例最密集的功能（时间窗判责、幂等、退款一致性）。</li>
+  </ul>
+  <p><b>建议不做：A5（一键生成求拼车文案）与 B4（FAQ 自动挖掘）</b>，理由见第五节。</p>
+  <p><b>四个可选组合（构成固定，工作量可自核）：</b></p>
+  <ul>
+    <li>组合一「后端技术向」＝ A1＋B1＋B5，约 8–12 人日。</li>
+    <li>组合二「测试开发向」＝ B3＋A2＋B2，约 8–12 人日。</li>
+    <li>组合三「演示效果向（答辩 3 分钟）」＝ A2＋A4＋B5，约 5.5–8 人日。</li>
+    <li>组合四「最低成本保底（3–4 人日）」＝ A3＋A4，约 3.5–4 人日。</li>
+  </ul>
+</div>
+
+<!-- ============ 2 对比表 ============ -->
+<h2>二、候选功能对比表（10 个候选一张表，可横向滚动）</h2>
+<div class="table-hint">共 10 列：表格可左右拖动查看「简历讲点 / 推荐度 / 来源」；点「共 N 条 ↗」可跳到详情卡片，完整 URL 列表在卡片末尾。</div>
+<div class="table-outer">
+<div class="table-wrap">
+<table class="cmp">
+<thead>
+<tr>
+  <th>候选</th>
+  <th>场景（用户会怎么说）</th>
+  <th>需求证据（含证据类型）</th>
+  <th>实现方式</th>
+  <th>外部依赖</th>
+  <th>工作量(人日)</th>
+  <th>与六场景重叠度</th>
+  <th>简历讲点(后端/测开)</th>
+  <th>推荐度</th>
+  <th>来源</th>
+</tr>
+</thead>
+<tbody>
+<tr>
+  <td>A1 语义化行程搜索与智能撮合</td>
+  <td>"周五18点去邯郸，能带大件、离地铁近"</td>
+  <td>哈啰开放 MCP <span class="badge b-real">真实产品功能</span>；嘀嗒《订单匹配规则》<span class="badge b-doc">官方文档</span>——行业热点＋特征工程可复刻</td>
+  <td>NL→结构化（function calling＋规则模板）→ ES 动态 DSL 两阶段召回排序 → 特征解释层</td>
+  <td>无/可 mock：LLM 走本地 Ollama，200+ 条种子行程自造</td>
+  <td class="mono">3–4</td>
+  <td>高衔接——复用 trip-service 的 ES 与行程底座，与场景1共用数据</td>
+  <td>两阶段召回/动态 DSL/Caffeine+Redis 多级缓存/Sentinel 限流；NL 解析 golden 集＋排序边界单测</td>
+  <td class="stars">★★★★★</td>
+  <td><a class="cardsrc" href="#card-A1">共 4 条 ↗</a><br><span class="srclinks"><a href="https://www.hello-inc.com/m/detail.html?guid=33ff70c41c654a85b26db054225e3913&amp;type=news">哈啰 MCP</a><br><a href="https://static.didapinche.com/b_html/html/fs7uafiii1520240123040556080.html?">嘀嗒匹配规则</a></span></td>
+</tr>
+<tr>
+  <td>A2 智能取消挽留与退改费用解释</td>
+  <td>"明天去不了了，现在取消扣我多少钱？"</td>
+  <td>嘀嗒取消规则/自动判责 <span class="badge b-doc">官方文档</span><span class="badge b-real">真实产品功能</span>；12306 候补 <span class="badge b-doc">官方文档</span></td>
+  <td>规则引擎算判责与违约金（复用订单状态机）＋替代方案查询，LLM 只做话术解释</td>
+  <td>无/可 mock：纯系统内订单/行程/候补数据</td>
+  <td class="mono">2–3</td>
+  <td>中——场景2 cancelOrder 的前置增值层，不重复</td>
+  <td>判责状态机/挽留幂等/延时消息/退款衔接；时间窗临界点边界断言全组最密</td>
+  <td class="stars">★★★★★</td>
+  <td><a class="cardsrc" href="#card-A2">共 5 条 ↗</a><br><span class="srclinks"><a href="https://web.didachuxing.com/web-cancelrulecarpool/">嘀嗒取消规则</a><br><a href="https://www.12306.cn/mormhweb/zxdtzz/201812/t20181222_421944.html">12306 候补规则</a></span></td>
+</tr>
+<tr>
+  <td>A3 优惠组合与省钱建议</td>
+  <td>"我这张券怎么用最省钱？"</td>
+  <td>滴滴券不可叠加 <span class="badge b-doc">官方文档</span>；携程专享价联动 <span class="badge b-real">真实产品功能</span>；自动算最省组合属 <span class="badge b-infer">推断</span></td>
+  <td>券×满座折扣×候补组合枚举＋约束校验取实付最小，复用已有券引擎做"离线试算"</td>
+  <td>无/可 mock：数据全来自系统内券包与订单</td>
+  <td class="mono">2</td>
+  <td>中低——与场景3领券邻近，错开为"下单用券决策辅助"</td>
+  <td>试算/实付共用规则链一致性、算价缓存；券互斥/门槛/精度边界用例集（测开价值高）</td>
+  <td class="stars">★★★</td>
+  <td><a class="cardsrc" href="#card-A3">共 5 条 ↗</a><br><span class="srclinks"><a href="https://page.xiaojukeji.com/market/ddPage_0sUuuw9Z.html">滴滴券规则</a><br><a href="http://pages.c-ctrip.com/hotels/h5/pages/vip-v3.html">携程专享价</a></span></td>
+</tr>
+<tr>
+  <td>A4 行程须知卡片自动生成</td>
+  <td>系统主动推："发车前看一眼须知卡片"</td>
+  <td>12306 信息推送体系 <span class="badge b-doc">官方文档</span>；AI 攻略卡片形态 <span class="badge b-infer">推断</span></td>
+  <td>RocketMQ 延时消息触发＋多源聚合＋前端卡片组件，LLM 只写 100 字文案</td>
+  <td>无新增/可 mock：天气沿用项目已有 mock 或免费 key，路况 mock</td>
+  <td class="mono">1.5–2</td>
+  <td>中——已有"天气提醒"的卡片化升级，与场景5一主动一被动</td>
+  <td>延时任务可靠性（XXL-Job 兜底）/推送频控；聚合契约测试/触发时点校验</td>
+  <td class="stars">★★★</td>
+  <td><a class="cardsrc" href="#card-A4">共 3 条 ↗</a><br><span class="srclinks"><a href="http://www.china-railway.com.cn/xwzx/zhxw/202308/t20230823_129806.html">国铁推送公告</a></span></td>
+</tr>
+<tr>
+  <td>A5 一键生成求拼车分享文案</td>
+  <td>"帮我写条求拼车朋友圈"</td>
+  <td>嘀嗒微信邀请同行 <span class="badge b-real">真实产品功能</span>（分享的是行程卡片/邀请链接）；AI 生成文案形态 <span class="badge b-infer">推断</span>，未找到真实产品对应<br><span class="only-infer">仅推断</span></td>
+  <td>纯 LLM：行程结构化字段 → prompt 模板 → 2–3 版文案</td>
+  <td>无/可 mock</td>
+  <td class="mono">0.5–1</td>
+  <td>低——独立新意图 genShareCopy，与场景4发单引流目标重叠</td>
+  <td>薄：后端讲不出并发/缓存/幂等；测开最多格式合规校验，无边界矩阵</td>
+  <td class="stars">★</td>
+  <td><a class="cardsrc" href="#card-A5">共 3 条 ↗</a><br><span class="srclinks"><a href="http://tech.cnr.cn/techph/20250529/t20250529_527189295.shtml">嘀嗒微信邀请</a></span></td>
+</tr>
+<tr>
+  <td>B1 客服工单智能分派+会话摘要+回复草稿</td>
+  <td>后台："转人工后自动打标签、出摘要和回复草稿"</td>
+  <td>阿里云伶鹊/Udesk/美洽/网易七鱼坐席辅助 <span class="badge b-real">真实产品功能</span>；EMNLP 2025 增量摘要论文 <span class="badge b-comm">社区讨论</span></td>
+  <td>function calling 分派路由 ＋ MQ 异步摘要 ＋ RAG 回复草稿，高频标签规则兜底</td>
+  <td>无/可 mock：脚本造 50–100 条模拟会话</td>
+  <td class="mono">3–5</td>
+  <td>高衔接——直接消费现有"转人工队列"事件</td>
+  <td>MQ 异步/Sentinel 限流降级/摘要只转人工触发一次控成本/Skywalking 全链；摘要 golden 集</td>
+  <td class="stars">★★★★★</td>
+  <td><a class="cardsrc" href="#card-B1">共 5 条 ↗</a><br><span class="srclinks"><a href="https://help.aliyun.com/zh/ccs/cccai/user-guide/what-is-smart-seat-assist">阿里云伶鹊</a><br><a href="https://www.udesk.cn/ucm/faq/68481/">Udesk 坐席辅助</a></span></td>
+</tr>
+<tr>
+  <td>B2 评价文本→信任标签抽取+评价摘要</td>
+  <td>"把'师傅准时、车内干净'这句评语变成信任标签"</td>
+  <td>嘀嗒三类用户标签 <span class="badge b-real">真实产品功能</span>；滴滴印象标签/行为分 <span class="badge b-real">真实产品功能</span></td>
+  <td>LLM function calling 抽标签＋正负加权时间衰减信任分＋一句评价摘要，负面标签正则零 token 兜底</td>
+  <td>无/可 mock：脚本造 100+ 条互评文本</td>
+  <td class="mono">2–3</td>
+  <td>中——原方案已有信任分模块的 AI 增强，非从零做</td>
+  <td>事件驱动 MQ 异步/去重幂等/削峰限流/死信；"评语→期望标签"标注集做准确率回归</td>
+  <td class="stars">★★★★</td>
+  <td><a class="cardsrc" href="#card-B2">共 3 条 ↗</a><br><span class="srclinks"><a href="https://www.creditchina.gov.cn/zoujinxinyong/chengxinwenhua/qiyechengxinwenhua/202609/t20260908_481424.html">嘀嗒用户标签</a></span></td>
+</tr>
+<tr>
+  <td>B3 接口用例自动生成+AI 助手评估平台</td>
+  <td>工程线："从 OpenAPI 自动生成接口用例，CI 里跑 golden 集门禁"</td>
+  <td>RESTifAI 等论文 <span class="badge b-comm">社区讨论</span>；api-test-generator 等工具 <span class="badge b-os">开源项目</span>；TesterHome 讨论 <span class="badge b-comm">社区讨论</span></td>
+  <td>OpenAPI→结构化用例转 REST Assured 脚本 ＋ 意图 golden 集/工具调用成功率回归流水线（Mock LLM）</td>
+  <td>无/可 mock：OpenAPI 来自自有工程，LLM 可 Mock</td>
+  <td class="mono">4–6</td>
+  <td>高衔接——落在原方案§七已规划的评估脚本上，平台化升级；是工程质量平台，不是用户可见功能</td>
+  <td>CI 回归门禁（分数下降即红灯）/评估集防泄漏/Mock LLM 单测三层漏斗；用例生成服务的 MQ 异步</td>
+  <td class="stars">★★★★</td>
+  <td><a class="cardsrc" href="#card-B3">共 5 条 ↗</a><br><span class="srclinks"><a href="https://arxiv.org/abs/2512.08706">RESTifAI 论文</a><br><a href="https://pypi.org/project/api-test-generator/">api-test-generator</a></span></td>
+</tr>
+<tr>
+  <td>B4 FAQ 自动挖掘+RAG 自更新</td>
+  <td>"从历史工单自动挖出 FAQ 并更新知识库"</td>
+  <td>实在智能知识库自愈/ZBrain 方案 <span class="badge b-doc">官方文档</span><span class="badge b-os">开源项目</span>；AWS/My AskAI 博客 <span class="badge b-doc">官方文档</span></td>
+  <td>XXL-Job 聚类抽 Q&amp;A ＋ 向量相似度判重去重 ＋ 人工审核入库重建索引</td>
+  <td>无/可 mock：复用现有 RAG 向量库</td>
+  <td class="mono">3–4</td>
+  <td>高重复——与现有场景⑥ FAQ RAG 共享同一知识库，重复度最高</td>
+  <td>边际增量小（定时任务/向量重建已有更重场景）；Recall@K/MRR 召回评估体量小</td>
+  <td class="stars">★★</td>
+  <td><a class="cardsrc" href="#card-B4">共 4 条 ↗</a><br><span class="srclinks"><a href="https://aws.amazon.com/cn/blogs/china/using-large-language-models-and-rag-architecture-to-build-an-intelligent-support-case-qa-system/">AWS 案例博客</a></span></td>
+</tr>
+<tr>
+  <td>B5 安全/紧急意图识别</td>
+  <td>"司机把车开到偏僻地方了，我好害怕"</td>
+  <td>滴滴紧急求助/安全 AI 模型 <span class="badge b-real">真实产品功能</span>；T3 高风险语义警示 <span class="badge b-real">真实产品功能</span>；言语骚扰检测论文 93.8% <span class="badge b-comm">社区讨论</span></td>
+  <td>高危词规则零 token 前置拦截 ＋ LLM 风险分级 ＋ 独立紧急通道（事务消息最终一致）</td>
+  <td>无/可 mock：用现有行程订单数据，只做文本不做语音</td>
+  <td class="mono">2–3</td>
+  <td>中——原方案已有"手动一键报警/行程分享"的主动化升级</td>
+  <td>紧急通道隔离/高优队列/LLM 挂了规则仍兜底/事务消息；对抗样本集压漏报率</td>
+  <td class="stars">★★★★</td>
+  <td><a class="cardsrc" href="#card-B5">共 5 条 ↗</a><br><span class="srclinks"><a href="https://www.didiglobal.com/news/newsDetail?id=424&amp;type=blog">滴滴紧急求助</a><br><a href="https://www.sh.chinanews.com.cn/swzx/2025-12-02/142907.shtml">T3 高风险语义</a></span></td>
+</tr>
+</tbody>
+</table>
+</div>
+</div>
+
+<!-- ============ 3 详情卡片 ============ -->
+<h2>三、单个候选详情</h2>
+
+<div class="card" id="card-A1">
+  <div class="head"><h3>A1 语义化行程搜索与智能撮合</h3><span class="stars stars-h">★★★★★</span></div>
+  <div class="badges"><span class="badge b-real">真实产品功能</span><span class="badge b-doc">官方文档</span></div>
+  <div class="kv"><b>功能是什么：</b>用户在助手/搜索框说自然语言软需求（"周五18点从石家庄去邯郸、能带大件行李、最好离地铁近"），系统自动抽结构化查询（时间窗/起终点/行李偏好/上车点偏好），走 ES 召回→多特征排序→TopN 行程，并解释"为什么这几单推荐给你"。</div>
+  <div class="kv"><b>用户真会用吗（需求证据）：</b>
+    <ul>
+      <li><span class="badge b-real">真实产品功能</span>哈啰顺风车 2026-04 行业首创开放 MCP：车主匹配、路线规划、价格计算、差异化筛选（宠物友好、豪华车）等核心能力以标准化接口开放给 AI 模型——AI 调用撮合能力就是行业当下方向。</li>
+      <li><span class="badge b-doc">官方文档</span>嘀嗒《订单匹配规则》：匹配核心特征是"车主接乘客的额外绕路距离"和"乘客/车主里程比"两个可量化特征——撮合排序是特征工程问题，个人项目可 mock 复刻。</li>
+      <li><span class="badge b-real">真实产品功能</span>嘀嗒"附近最优"上车点推荐：按匹配效率、步行距离、顺路车数、价格综合打分——"综合打分＋解释"形态已被验证。</li>
+      <li><span class="badge b-real">真实产品功能</span>嘀嗒车主侧常用路线×8、途经点、顺路自动抢单、关注行程相似自动提醒（2026-05）。</li>
+    </ul>
+  </div>
+  <div class="kv"><b>技术怎么实现：</b>不是纯 LLM。NL→结构化走 LLM function calling 抽取，高频句式走规则模板（复用现有三层漏斗）；召回复用 trip-service 已有 ES（IK 分词＋行程索引）动态组装查询 DSL；排序特征＝时间匹配度、直线距离近似绕路、车主信任分/评分、余座数；解释层把命中特征转成一句话（"这班车主路线与你重合度 92%，且信任分 4.8"）。</div>
+  <div class="kv"><b>工作量与依赖：</b>3–4 人日（NL 抽取工具 1d＋ES 动态 DSL 与排序服务 1.5d＋解释生成与前端展示 1d）。零付费 API，LLM 可插拔（Ollama 本地），天气/地图均不需要；200+ 条往返石家庄/邯郸虚拟行程种子数据即可演示。风险：ES 动态 DSL 组装注意注入与语法边界。</div>
+  <div class="kv"><b>简历讲点：</b>后端——两阶段召回（粗排 ES filter→细排特征打分）、动态查询 DSL 组装、热门路线多级缓存（Caffeine+Redis）、特征计算并发（CompletableFuture 并行取信任分/余座）、Sentinel 限流保护 ES；"为什么推荐"＝决策可追溯。测开——NL 解析 golden 集（50 条口语样例→期望结构化条件）算抽取准确率；排序特征边界单测；Mock LLM 测 function calling 参数；召回率/排序位置评估脚本。</div>
+  <div class="kv"><b>与六场景衔接：</b>不重复，双边互补。新增意图 semanticSearch 挂在三层漏斗 LLM 层；复用 trip-service 的 ES 搜索与行程详情接口；与场景1 queryTrip 共用行程数据底座。</div>
+  <div class="src"><b>来源：</b><ul>
+    <li>哈啰开放 MCP 服务（官方新闻）：<a href="https://www.hello-inc.com/m/detail.html?guid=33ff70c41c654a85b26db054225e3913&amp;type=news">https://www.hello-inc.com/m/detail.html?guid=33ff70c41c654a85b26db054225e3913&amp;type=news</a></li>
+    <li>嘀嗒《订单匹配规则》（官方文档）：<a href="https://static.didapinche.com/b_html/html/fs7uafiii1520240123040556080.html?">https://static.didapinche.com/b_html/html/fs7uafiii1520240123040556080.html?</a></li>
+    <li>嘀嗒"附近最优"上车点推荐（媒体报道）：<a href="https://view.inews.qq.com/a/20250617A07BRB00">https://view.inews.qq.com/a/20250617A07BRB00</a></li>
+    <li>嘀嗒同兴趣邀请/关注行程（媒体报道）：<a href="http://www.eeo.com.cn/2026/0509/869853.shtml">http://www.eeo.com.cn/2026/0509/869853.shtml</a></li>
+  </ul></div>
+</div>
+
+<div class="card" id="card-A2">
+  <div class="head"><h3>A2 智能取消挽留与退改费用解释</h3><span class="stars stars-h">★★★★★</span></div>
+  <div class="badges"><span class="badge b-doc">官方文档</span><span class="badge b-real">真实产品功能</span><span class="badge b-comm">社区讨论</span><span class="badge b-infer">推断</span></div>
+  <div class="kv"><b>功能是什么：</b>用户说"明天去不了了/时间太赶想改晚上"时，助手不直接执行取消：①识别取消/改签意图与原因 → ②按规则实时算判责与违约金（距发车时间窗）→ ③给替代方案（改时间可行班/换其他车主/先上候补）→ ④把"扣多少钱、退到哪、多久到账"用人话讲清楚，用户确认后才执行。</div>
+  <div class="kv"><b>用户真会用吗（需求证据）：</b>
+    <ul>
+      <li><span class="badge b-doc">官方文档</span>嘀嗒《顺风车取消规则》《乘客有责取消判责规则》：市内订单出发前 15 分钟、城际 2 小时保护期内取消收补偿金，30 分钟索赔窗口，未索赔全额退回。</li>
+      <li><span class="badge b-real">真实产品功能</span>嘀嗒：乘客和车主取消时均需选择取消原因，系统自动判责并对有责方惩罚（扣信任分/取消次数/补偿金）。</li>
+      <li><span class="badge b-comm">社区讨论</span>哈啰规则媒体实测：出发前 15 分钟前取消双方无责，之后有责方被同时扣当日取消次数、信任分、取消费——三家规则各不相同，用户搞不清"现在取消亏不亏"是真实吐槽点。</li>
+      <li><span class="badge b-doc">官方文档</span>12306 候补：最多 6 个候补订单、每单最多 60 个车次、可"接受临时新增列车"——"没车时用候补兜底"是国家级产品验证过的范式。</li>
+      <li><span class="badge b-infer">推断</span>"取消前给替代方案挽留"在顺风车 App 内未见明确官方功能名，属对现有判责能力的 AI 增值层。</li>
+    </ul>
+  </div>
+  <div class="kv"><b>技术怎么实现：</b>规则为主、LLM 只做话术。违约金/判责＝纯规则引擎（复用 order-service 订单状态机已有取消逻辑，按时间窗分档：保护期内免费/接近发车档扣 X%），LLM 不参与算账；替代方案＝复用现有查询：查同路线可用行程（改时间）、查候补队列状态。</div>
+  <div class="kv"><b>工作量与依赖：</b>2–3 人日（取消挽留对话流状态机 1d＋判责规则与违约金计算复用/收口 0.5d＋替代方案查询串联 0.5d＋LLM 话术模板 0.5d）。无付费 API；判责规则可自定分档（对齐嘀嗒：城际提前 2 小时无责）。演示把系统时间拨到"发车前 1.5 小时"即可展示扣款分档。风险：挽留流程防重复触发幂等（同一订单挽留状态只推一次）。</div>
+  <div class="kv"><b>简历讲点：</b>后端——取消判责状态机（无责/部分有责/有责×时间窗矩阵）、违约金计算规则链、挽留流程幂等（Redis 标记"已挽留"）、延时消息（用户犹豫超时自动二次提醒）、与支付退款链路衔接。测开——全组边界用例最密集：时间窗临界点（提前 2 小时整 vs 1 小时 59 分）、保护期内外、30 分钟索赔窗口边界、重复取消幂等、并发取消与占座释放竞态；"是否算错钱"做规则断言兜底而非 LLM 自评（一票否决项）。</div>
+  <div class="kv"><b>与六场景衔接：</b>不重复，是现有场景2（queryOrder/cancelOrder）的前置增值层。在 assistant-service 拦截 cancelOrder 意图，先走挽留子流程，用户确认后才调既有 cancelOrder function；与 FAQ 互补——FAQ 讲通用规则，A2 讲"你这单现在取消具体扣多少"。</div>
+  <div class="src"><b>来源：</b><ul>
+    <li>嘀嗒顺风车取消规则（官方）：<a href="https://web.didachuxing.com/web-cancelrulecarpool/">https://web.didachuxing.com/web-cancelrulecarpool/</a></li>
+    <li>嘀嗒取消规则细则（官方）：<a href="https://web.didachuxing.com/web-cancelrule/">https://web.didachuxing.com/web-cancelrule/</a></li>
+    <li>哈啰取消费规则媒体实测：<a href="https://sc.sina.cn/news/b/2020-08-06/detail-iivhvpwx9424539.d.html?pos=69">https://sc.sina.cn/news/b/2020-08-06/detail-iivhvpwx9424539.d.html?pos=69</a></li>
+    <li>嘀嗒取消原因选择与自动判责（媒体报道）：<a href="http://m.ikanchai.com/article/123296">http://m.ikanchai.com/article/123296</a></li>
+    <li>12306 候补购票规则（官方）：<a href="https://www.12306.cn/mormhweb/zxdtzz/201812/t20181222_421944.html">https://www.12306.cn/mormhweb/zxdtzz/201812/t20181222_421944.html</a></li>
+  </ul></div>
+</div>
+
+<div class="card" id="card-A3">
+  <div class="head"><h3>A3 优惠组合与省钱建议</h3><span class="stars stars-h">★★★</span></div>
+  <div class="badges"><span class="badge b-doc">官方文档</span><span class="badge b-real">真实产品功能</span><span class="badge b-comm">社区讨论</span><span class="badge b-infer">推断</span></div>
+  <div class="kv"><b>功能是什么：</b>下单前自动穷举"可用券×拼车满座折扣×是否候补"的组合，算全局最省方案（含互斥校验、金额边界），直接告诉用户"你这单用 A 券＋接受拼满座能省 12.5 元，候补成功率 80%"，LLM 只负责把结论写成推荐话术。</div>
+  <div class="kv"><b>用户真会用吗（需求证据）：</b>
+    <ul>
+      <li><span class="badge b-doc">官方文档</span>滴滴官方活动规则：优惠券默认选中抵扣金额最高的一张、券不可叠加——真实平台连券之间都不叠加，用户只能被动接受默认最优券。</li>
+      <li><span class="badge b-real">真实产品功能</span>携程商旅"高铁专享/机票专享价"酒店联动折扣——跨产品联动省钱的官方形态存在，但没有智能组合计算。</li>
+      <li><span class="badge b-comm">社区讨论</span>OTA 实测评测（2026-10）：飞猪以商家自主券包为主、"平台统一叠加规则较少，优惠适配性随航线店铺差异"。</li>
+      <li><span class="badge b-infer">推断</span>"下单页自动算最省组合"在顺风车 App 未见官方功能，属推断增强。</li>
+    </ul>
+  </div>
+  <div class="kv"><b>技术怎么实现：</b>纯计算＋LLM 解释。用户持券数量有限（≤10），枚举 C(n,≤2) 子集×满座折扣开关×候补开关，约束校验（互斥规则、门槛金额、有效期）后取实付最小值；完全复用 marketing-service 已有券引擎，本质是把已有结算规则链做一个"离线试算入口"；候补成功率用历史递补率统计 mock。</div>
+  <div class="kv"><b>工作量与依赖：</b>2 人日（组合枚举与约束求解 1d＋试算接口缓存 0.5d＋LLM 推荐话术 0.5d）。无外部依赖。风险：与已有券引擎结算逻辑必须共用同一套规则代码，否则"试算价"和"实付价"对不上会穿帮——这恰好是可讲的一致性考点。</div>
+  <div class="kv"><b>简历讲点：</b>后端亮点中等偏薄——组合枚举是简单约束求解，真正的亮点是"试算与实付共用规则链保证一致性"、算价结果缓存、并发算价限流，与已有券引擎卖点重叠。测开价值高——券互斥/门槛/精度（分位取舍）/满座折扣叠加顺序/候补改价回滚，天然是结算规则引擎边界用例集，与项目§七"结算规则引擎单测"直接呼应。</div>
+  <div class="kv"><b>与六场景衔接：</b>与场景3（queryCoupon/claimCoupon）邻近但错开：场景3 答"有什么券能领"（营销触达），A3 答"下单时怎么组合最省"（决策辅助）。下单确认页旁挂"省钱方案"卡片；LLM 只在用户追问"为什么这个组合最省"时解释，常规计算零 token。</div>
+  <div class="src"><b>来源：</b><ul>
+    <li>滴滴优惠券规则（官方活动页）：<a href="https://page.xiaojukeji.com/market/ddPage_0sUuuw9Z.html">https://page.xiaojukeji.com/market/ddPage_0sUuuw9Z.html</a></li>
+    <li>滴滴企业版券规则（官方）：<a href="https://es.xiaojukeji.com/profile/didies_activity">https://es.xiaojukeji.com/profile/didies_activity</a></li>
+    <li>滴滴租车补贴可叠加第三方（官方）：<a href="https://www6.didiglobal.com/travel-service/car-rental">https://www6.didiglobal.com/travel-service/car-rental</a></li>
+    <li>携程商旅专享价联动（官方）：<a href="http://pages.c-ctrip.com/hotels/h5/pages/vip-v3.html">http://pages.c-ctrip.com/hotels/h5/pages/vip-v3.html</a></li>
+    <li>OTA 优惠规则媒体实测：<a href="http://news.cnair.com/c/202607/143822.html">http://news.cnair.com/c/202607/143822.html</a></li>
+  </ul></div>
+</div>
+
+<div class="card" id="card-A4">
+  <div class="head"><h3>A4 行程须知卡片／出行攻略自动生成</h3><span class="stars stars-h">★★★</span></div>
+  <div class="badges"><span class="badge b-doc">官方文档</span><span class="badge b-comm">社区讨论</span><span class="badge b-infer">推断</span></div>
+  <div class="kv"><b>功能是什么：</b>发单成功或发车前 N 小时，自动聚合一张"出行须知卡片"：集合点（上下车点定位引导）、出发地/目的地天气、路况时段提示、费用明细（车费/已用券/预估分摊）、同乘礼仪提示（不迟到/行李摆放/接电话），推送给乘客与车主双方。</div>
+  <div class="kv"><b>用户真会用吗（需求证据）：</b>
+    <ul>
+      <li><span class="badge b-doc">官方文档</span>国铁集团 2023 年官方公告：12306 在购票/退票/改签/停运推送基础上，新增候补临客、晚点提示、检票地点变更推送，并扩展到向乘车人推送——行程前主动聚合信息推送是国家级产品的成熟形态。</li>
+      <li><span class="badge b-doc">官方文档</span>12306 隐私政策：会发送"行程通知短信，主要包括电子客票相关信息及目的地服务等内容"。</li>
+      <li><span class="badge b-comm">社区讨论</span>2026-07 央广网报道：12306 把凌晨车次乘车提示改为"提前一晚到站候车"。</li>
+      <li><span class="badge b-infer">推断</span>把天气＋费用＋礼仪聚合成一张 AI 生成的攻略卡片，形态属推断增强；项目已有"天气提醒"功能，A4 是它的产品化升级。</li>
+    </ul>
+  </div>
+  <div class="kv"><b>技术怎么实现：</b>触发＝RocketMQ 延时消息＋XXL-Job 巡检兜底（项目通知模块已有这套机制，直接复用）；聚合＝一次调用内部聚合订单费用明细（order-service）、天气（已有天气 API/mock）、路况（城市高峰时段表 mock）、礼仪提示（模板库）；生成＝LLM 把聚合结果拼成 100 字内须知文案，卡片本身是前端组件，不走 LLM。不要重复造天气链路。</div>
+  <div class="kv"><b>工作量与依赖：</b>1.5–2 人日（聚合接口 0.5d＋延时触发与推送复用 0.5d＋卡片前端 0.5d＋LLM 文案 0.5d）。无新增付费；天气沿用项目已有 mock/免费 key，路况 mock，可 mock 程度高。</div>
+  <div class="kv"><b>简历讲点：</b>后端中等——多数据源聚合接口、延时任务可靠性（消息丢了 XXL-Job 兜底）、推送频控，更多是产品完整度叙事而非技术亮点。测开——聚合接口契约测试、延时触发时点正确性（发车前 N 小时整）、卡片内容完整性校验（缺天气/缺费用要报警）、重复推送幂等。</div>
+  <div class="kv"><b>与六场景衔接：</b>与场景5（queryWeather 目的地天气问答）衔接最紧：场景5 是用户主动问，A4 是系统主动推聚合卡片，一被动一主动。挂在通知模块（assistant-service），不进对话意图树；发车前 N 小时触发，与"到点提醒"（发车前 30 分钟）形成时间序列：须知卡片→到点提醒。</div>
+  <div class="src"><b>来源：</b><ul>
+    <li>国铁集团优化 12306 信息服务推送（官方）：<a href="http://www.china-railway.com.cn/xwzx/zhxw/202308/t20230823_129806.html">http://www.china-railway.com.cn/xwzx/zhxw/202308/t20230823_129806.html</a></li>
+    <li>12306 行程通知与目的地服务（官方隐私政策）：<a href="https://kyfw.12306.cn/otn/gonggao/PrivacyPolicy.html">https://kyfw.12306.cn/otn/gonggao/PrivacyPolicy.html</a></li>
+    <li>12306 乘车提示精细化（央广网）：<a href="http://news.cnr.cn/native/gd/20260711/t20260711_527703872.shtml">http://news.cnr.cn/native/gd/20260711/t20260711_527703872.shtml</a></li>
+  </ul></div>
+</div>
+
+<div class="card" id="card-A5">
+  <div class="head"><h3>A5 一键生成"求拼车"分享文案</h3><span class="stars stars-h">★</span></div>
+  <div class="badges"><span class="badge b-real">真实产品功能</span><span class="badge b-infer">推断</span></div>
+  <div class="kv"><b>功能是什么：</b>行程发布后一键生成 2–3 版群聊/朋友圈文案（"周五晚 6 点 石家庄→邯郸，还差 1 位，均摊 45/人，有意私"），支持复制与生成分享图。</div>
+  <div class="kv"><b>用户真会用吗（需求证据）：</b>
+    <ul>
+      <li><span class="badge b-real">真实产品功能</span>嘀嗒 2025-05 上线微信邀请同行：乘客下单后可把行程分享至微信邀请好友拼单，双方均得奖励；车主发单后也可微信邀请。</li>
+      <li><span class="badge b-real">真实产品功能</span>嘀嗒行程分享链路：乘车记录→行程分享→微信；另有安全行程自动短信分享给紧急联系人。</li>
+      <li><span class="badge b-infer">推断</span>真实产品分享的是行程卡片/邀请链接（带状态、可直接接单），而"AI 生成营销文案"这个形态未找到真实产品对应，属推断；个人项目不上线，分享文案没有真实传播出口。</li>
+    </ul>
+  </div>
+  <div class="kv"><b>技术怎么实现：</b>纯 LLM 生成：输入行程结构化字段（起终点/时间/价格/余座）→ prompt 模板输出 2–3 版文案。无召回、无规则链。</div>
+  <div class="kv"><b>工作量与依赖：</b>0.5–1 人日（prompt 模板＋生成接口＋前端复制按钮）。外部数据零。技术增量几乎为零，是全组唯一"一个 LLM 调用就完"的功能。</div>
+  <div class="kv"><b>简历讲点：</b>后端薄——只能讲 LLM 接口限流与可插拔，讲不出并发/缓存/事务/幂等任何硬核点，面试官容易追问"这和直接调豆包 API 有什么区别"。测开薄——最多做输出格式合规校验（字数/必填字段不缺失）单测，无边界矩阵可言。</div>
+  <div class="kv"><b>与六场景衔接：</b>独立新意图 genShareCopy，与六场景均不重复；但与 A1（搜单撮合）的引流目标重叠。建议不做独立功能，降级为 A1 发单引导（场景4 guidePublish）成功后的一个附属按钮，或并入 A4 须知卡片底部"邀请同乘"入口。</div>
+  <div class="src"><b>来源：</b><ul>
+    <li>嘀嗒微信邀请同行拼单（央广网）：<a href="http://tech.cnr.cn/techph/20250529/t20250529_527189295.shtml">http://tech.cnr.cn/techph/20250529/t20250529_527189295.shtml</a></li>
+    <li>嘀嗒行程分享教程（媒体教程，弱证据）：<a href="https://m.duote.com/tech/202406/660178.html">https://m.duote.com/tech/202406/660178.html</a></li>
+    <li>嘀嗒安全行程自动分享（媒体报道）：<a href="http://m.toutiao.com/group/6740910897453072909/">http://m.toutiao.com/group/6740910897453072909/</a></li>
+  </ul></div>
+</div>
+
+<div class="card" id="card-B1">
+  <div class="head"><h3>B1 客服工单智能分派＋会话摘要＋回复草稿</h3><span class="stars stars-h">★★★★★</span></div>
+  <div class="badges"><span class="badge b-real">真实产品功能</span><span class="badge b-comm">社区讨论</span></div>
+  <div class="kv"><b>功能是什么：</b>AI 助手转人工后，自动给待处理工单打业务标签（退款纠纷/取消改签/投诉绕路/券问题…）并按标签路由到对应客服组；把整段多轮对话压缩成结构化摘要（用户诉求、已做操作、争议点）带到人工工作台；再基于工单类型＋RAG 知识库给坐席生成可一键发送、可编辑的回复草稿。</div>
+  <div class="kv"><b>用户真会用吗（需求证据）：</b>
+    <ul>
+      <li><span class="badge b-real">真实产品功能</span>阿里云伶鹊"智能坐席辅助"：话前进线摘要、诉求识别、话后会话小结与工单自动填充，官方定位"接起即懂来意、话后自动成稿"。</li>
+      <li><span class="badge b-real">真实产品功能</span>沃丰 Udesk 大模型坐席辅助：对话中实时生成多版本应答话术（严谨/通俗/安抚），坐席一键选用。</li>
+      <li><span class="badge b-real">真实产品功能</span>美洽 AI 客服智能路由按问题类型/历史记录分流，转人工时自动带上下文；网易七鱼支持按咨询问题/坐席能力分流。</li>
+      <li><span class="badge b-comm">社区讨论</span>EMNLP 2025 Industry 论文《Incremental Summarization for Customer Support》：工业界已上线的对话增量摘要系统，复杂工单处理时长下降最高 9%。</li>
+    </ul>
+  </div>
+  <div class="kv"><b>技术怎么实现：</b>分层——分派：工单标签枚举（10–15 个）→ LLM 一次结构化抽取（function calling 输出 JSON：{label, priority, summary}）→ 规则路由表 label→客服组，高频标签先用关键词/正则兜底；会话摘要：固定 prompt 模板（①用户核心诉求 ②已确认事实/订单号 ③争议或未决点 ④建议下一步动作），输入落库的会话消息列表，长会话做增量摘要；回复草稿：RAG 检索该工单类型对应 FAQ/SOP＋历史上下文 → LLM 生成草稿，坐席可编辑。全部用自己系统数据，无需微调、复用现有向量库。</div>
+  <div class="kv"><b>工作量与依赖：</b>3–5 人日（标签枚举+分派规则 1d；摘要 prompt 与异步生成 1.5d；回复草稿+后台工作台展示 1.5d；联调）。无新中间件，LLM 走现有可插拔通道；会话数据用脚本批量造 50–100 条，演示拿一条"乘客投诉绕路+要求退款"的对话走全流程。</div>
+  <div class="kv"><b>简历讲点：</b>后端——①摘要/草稿异步化：会话结束事件进 RocketMQ，消费者调 LLM，工作台轮询/WebSocket 推送；②限流与降级：Sentinel 限流，超时或失败则摘要留空、分派回退默认组，不阻塞转人工；③成本控制：摘要只在转人工触发一次（非每轮），标签抽取优先规则命中；④Skywalking 链路看到"会话→MQ→LLM→工单"全链。测开——摘要/草稿纳入 golden 集（人工标注 20–30 条对话的期望标签+要点，评估抽取准确率）；Mock LLM 单测分派规则。</div>
+  <div class="kv"><b>与六场景衔接：</b>不重复。现有六场景是"用户→AI 助手"的前台对话；B1 是"AI 助手→人工客服"的后台增效，消费的正是现有"转人工队列"事件——转人工那一刻自动触发的下游流水线。不新增 C 端入口，全部在管理后台呈现（工单列表多"标签/摘要/草稿"三列），不干扰前台演示。</div>
+  <div class="src"><b>来源：</b><ul>
+    <li>阿里云伶鹊智能坐席辅助（官方产品文档）：<a href="https://help.aliyun.com/zh/ccs/cccai/user-guide/what-is-smart-seat-assist">https://help.aliyun.com/zh/ccs/cccai/user-guide/what-is-smart-seat-assist</a></li>
+    <li>沃丰 Udesk 大模型坐席辅助（官方）：<a href="https://www.udesk.cn/ucm/faq/68481/">https://www.udesk.cn/ucm/faq/68481/</a></li>
+    <li>美洽 AI 客服（官方）：<a href="https://www.meiqia.com/blog/ai-agent-1-0/">https://www.meiqia.com/blog/ai-agent-1-0/</a></li>
+    <li>网易七鱼（官方）：<a href="https://e-netcloud.com/">https://e-netcloud.com/</a></li>
+    <li>EMNLP 2025 Industry 增量摘要论文：<a href="https://aclanthology.org/anthology-files/anthology-files/pdf/emnlp/2025.emnlp-industry.140.pdf">https://aclanthology.org/anthology-files/anthology-files/pdf/emnlp/2025.emnlp-industry.140.pdf</a></li>
+  </ul></div>
+</div>
+
+<div class="card" id="card-B2">
+  <div class="head"><h3>B2 评价文本→信任标签抽取＋评价摘要</h3><span class="stars stars-h">★★★★</span></div>
+  <div class="badges"><span class="badge b-real">真实产品功能</span><span class="badge b-comm">社区讨论</span></div>
+  <div class="kv"><b>功能是什么：</b>行程结束双方互评后，把自由文本评语（如"师傅很准时，车内也干净，就是话有点少"）用 LLM 抽成结构化标签（准时/迟到/绕路/车内整洁/话少/好沟通/吸烟…），标签加权汇入信任分，并在用户主页生成一句评价摘要；标签在行程撮合/排序时作为展示与筛选因子。</div>
+  <div class="kv"><b>用户真会用吗（需求证据）：</b>
+    <ul>
+      <li><span class="badge b-real">真实产品功能</span>嘀嗒出行 2026-09 上线"诚信履约/接单行为/车况"三类用户标签，官方表述为"综合用户行为分、历史行为数据和具体行后评价等多维信息，智能生成"，并在订单列表同路人信息卡展示。</li>
+      <li><span class="badge b-real">真实产品功能</span>滴滴顺风车早期即有"印象标签"体系：双方互评时勾选/自定义标签，集中展示在用户信息卡；后将"信任值"升级为"行为分"，按收到的评价/投诉做多维履约、友好评估。</li>
+    </ul>
+  </div>
+  <div class="kv"><b>技术怎么实现：</b>以 LLM 为主、规则兜底：标签抽取枚举标签词表（10–15 个，正负各半）→ LLM function calling 输出 {tags:[{tag, sentiment, evidence_quote}]}，负面标签（绕路/迟到）先用关键词正则兜底零 token；信任分加权：正向标签 +1、负向 -2（可配置），时间衰减（近 90 天权重高），写用户表/信任分表——复用现有 user-service 信任分模块；评价摘要：把同一用户最近 N 条评语丢给 LLM 生成一句话摘要。无需向量库、无需微调。</div>
+  <div class="kv"><b>工作量与依赖：</b>2–3 人日（标签词表+抽取 prompt 1d；信任分加权规则与入库 0.5d；摘要+前端信息卡展示 1d）。外部依赖无；LLM 走可插拔通道。脚本造 100+ 条互评文本，演示展示"输入一段话→右侧自动冒出标签→信任分变化"。</div>
+  <div class="kv"><b>简历讲点：</b>后端——①评价事件驱动：行程完成事件进 MQ，异步消费做标签抽取，不阻塞评价提交接口；②幂等与防刷：同一条评价只抽一次（去重表），短时间大量评价用 MQ 削峰＋消费限流；③信任分读多写少，走 Caffeine 本地缓存＋Redis，标签聚合查询走 ES 或预计算；④抽取失败进死信，不影响主流程。测开——"评语→期望标签"标注集做准确率/召回率回归；Mock LLM 测信任分加权边界（正负标签、时间衰减、幂等）。</div>
+  <div class="kv"><b>与六场景衔接：</b>与现有六场景（前台对话）不重复。但与原方案§四"信任分：双方互评→信任分→影响展示排序"已有雏形——B2 不是从零做信任分，而是把原来可能靠"星级/布尔项"的互评升级为"自由文本→LLM 抽标签→加权信任分→摘要展示"，是对已有模块的 AI 增强，衔接自然、增量清晰。</div>
+  <div class="src"><b>来源：</b><ul>
+    <li>嘀嗒三类用户标签（官方发布）：<a href="https://www.creditchina.gov.cn/zoujinxinyong/chengxinwenhua/qiyechengxinwenhua/202609/t20260908_481424.html">https://www.creditchina.gov.cn/zoujinxinyong/chengxinwenhua/qiyechengxinwenhua/202609/t20260908_481424.html</a> <span class="note-small">（站点反爬，需在浏览器直接打开）</span></li>
+    <li>滴滴印象标签/行为分（36氪报道）：<a href="https://www.36kr.com/p/1724633055233">https://www.36kr.com/p/1724633055233</a></li>
+    <li>滴滴信用体系报道（环球网）：<a href="https://m.huanqiu.com/article/9CaKrnK8pBD">https://m.huanqiu.com/article/9CaKrnK8pBD</a></li>
+  </ul></div>
+</div>
+
+<div class="card" id="card-B3">
+  <div class="head"><h3>B3 接口用例自动生成＋AI 助手评估平台</h3><span class="stars stars-h">★★★★</span></div>
+  <div class="badges"><span class="badge b-comm">社区讨论</span><span class="badge b-os">开源项目</span></div>
+  <div class="kv"><b>功能是什么：</b>两件事：①从项目自己的 OpenAPI（Knife4j 导出）定义自动生成 REST 接口测试用例与断言（happy path/边界/异常）；②面向 AI 助手本身，构建意图 golden 集、工具调用成功率/准确率评估与回归流水线——即"测 LLM 系统的测试平台"。<b>注意形态：这是 CI 里跑的工程质量平台，不是面向用户的产品功能。</b></div>
+  <div class="kv"><b>用户真会用吗（需求证据）：</b>
+    <ul>
+      <li><span class="badge b-comm">社区讨论</span>论文《RESTifAI: LLM-Based Workflow for Reusable REST API Testing》（ICSE 2026 Demonstration track 录用，生成可执行 Postman collection）；APITestGenie（从业务需求+OpenAPI 用 LLM+RAG 生成 API 集成测试，在 10 个真实 API、约 1000 endpoint 上验证）。</li>
+      <li><span class="badge b-os">开源项目</span>PyPI api-test-generator（读 OpenAPI URL，本地 Ollama 生成 pytest 用例，覆盖正向/负向/边界）；api-test-ninja（OpenAPI+LLM 生成测试步骤、payload、跨步骤变量提取）。</li>
+      <li><span class="badge b-comm">社区讨论</span>TesterHome 上的 ai_test_agent：需求文档驱动并行生成用例、异步后台生成＋WebSocket 进度推送。</li>
+    </ul>
+  </div>
+  <div class="kv"><b>技术怎么实现：</b>①接口用例生成：解析 Knife4j/OpenAPI JSON → prompt 喂入（路径、入参 schema、出参 schema、错误码）→ LLM 输出结构化用例 {case_name, method, path, headers, body, expected_status, assert_fields} → 转成 REST Assured 可执行脚本；断言三类：状态码＋关键字段非空＋边界值。②评估平台：人工标注 50–100 条对话样本（用户 query、期望意图、期望调用 tool name、期望槽位）→ 批量推理脚本，指标＝意图准确率、工具调用成功率、参数正确率；LLM 可 Mock 也可真跑，差异即回归，结果入库。</div>
+  <div class="kv"><b>工作量与依赖：</b>4–6 人日（OpenAPI 解析+用例生成模板 1.5d；用例转可执行+断言校验 1d；golden 集标注 50–100 条 1d；评估脚本+CI 集成+报告页 1.5d）。无新中间件；OpenAPI 来自自己工程，golden 集自己标注；评估脚本本身就支持 Mock LLM（这正是它的测开价值）。</div>
+  <div class="kv"><b>简历讲点：</b>测开（主）——①评估集设计：如何分层标注、如何避免数据泄漏；②Mock LLM 单测——不依赖真实 LLM 也能测三层漏斗路由逻辑；③断言设计（状态码/字段/边界/幂等）；④回归门禁——golden 集分数下降即 CI 红灯；⑤补上已有 JMeter 之外"LLM 侧质量"这块空白。形态是 GitHub Actions CI 流水线＋后台趋势看板（意图准确率/工具调用成功率趋势），不要包装成 C 端功能。后端（次）——用例生成服务本身是个小后端（接收 OpenAPI、异步生成、进度查询 WebSocket），能讲 MQ 异步、任务状态机、限流。</div>
+  <div class="kv"><b>与六场景衔接：</b>不与前台六场景重复。但与原方案§三/§七已规划的"意图 golden 集准确率、工具调用成功率（Mock LLM）、LLM 评估脚本"高度重叠——B3 的真正增量是把已规划的评估从"一个脚本"升级为"平台化：用例自动生成＋CI 门禁＋趋势看板"。直接在原测试体系里落地，不另起炉灶。</div>
+  <div class="src"><b>来源：</b><ul>
+    <li>RESTifAI 论文（arXiv）：<a href="https://arxiv.org/abs/2512.08706">https://arxiv.org/abs/2512.08706</a></li>
+    <li>APITestGenie 论文（arXiv）：<a href="https://arxiv.org/pdf/2604.02039v1">https://arxiv.org/pdf/2604.02039v1</a></li>
+    <li>api-test-generator（PyPI 开源）：<a href="https://pypi.org/project/api-test-generator/">https://pypi.org/project/api-test-generator/</a></li>
+    <li>api-test-ninja（PyPI 开源）：<a href="https://pypi.org/project/api-test-ninja/">https://pypi.org/project/api-test-ninja/</a></li>
+    <li>TesterHome ai_test_agent 讨论：<a href="https://testerhome.com/topics/44615/show_wechat">https://testerhome.com/topics/44615/show_wechat</a></li>
+  </ul></div>
+</div>
+
+<div class="card" id="card-B4">
+  <div class="head"><h3>B4 FAQ 自动挖掘与 RAG 自更新</h3><span class="stars stars-h">★★</span></div>
+  <div class="badges"><span class="badge b-doc">官方文档</span><span class="badge b-os">开源项目</span><span class="badge b-infer">推断</span></div>
+  <div class="kv"><b>功能是什么：</b>定时/事件驱动地从已解决工单、转人工会话中挖掘高频重复问题，让 LLM 提炼成标准 FAQ 条目（问题+标准答案），人工审核后入 FAQ 表并重建向量索引；同时对现有 RAG 的切分质量与召回命中率做评估（Recall@K/MRR）。</div>
+  <div class="kv"><b>用户真会用吗（需求证据）：</b>
+    <ul>
+      <li><span class="badge b-doc">官方文档</span>实在智能"智能客服知识库自愈闭环"：自动感知对话/工单中的知识缺失信号→诊断→简单自动修复、复杂内容人工审核→效果验证。</li>
+      <li><span class="badge b-os">开源项目</span>ZBrain FAQ Generation Agent：分析 Zendesk/JIRA 已解决工单，用 LLM 抽取 Q&amp;A、合并重复条目、优化已有 FAQ。</li>
+      <li><span class="badge b-doc">官方文档</span>AWS 博客：Support Case 问答系统从 Support API 定期取最新 Case 自动更新知识库；My AskAI 区分 RAG（运行时检索）与 self-learning（知识体长出来）。</li>
+      <li><span class="badge b-infer">推断</span>个人项目不上线，工单数据是 mock 出来的几十条，"自动挖掘高频问题"在演示时挖不出真实痛点。</li>
+    </ul>
+  </div>
+  <div class="kv"><b>技术怎么实现：</b>XXL-Job 定时扫"已闭环工单"→ LLM 聚类相似问题＋抽 Q&amp;A 对 → 与现有 FAQ 表做向量相似度去重（>0.9 判重）→ 进待审核队列 → 后台人工确认 → 写 FAQ 表＋pgvector 重建索引；召回评估构造 30–50 条 query 标注正确文档，测 Recall@K/MRR 对比不同切分策略。</div>
+  <div class="kv"><b>工作量与依赖：</b>3–4 人日。外部数据无，用自己工单表；需向量库（现有 RAG 已具备）。风险：与现有场景⑥（FAQ RAG）共享同一知识库，增量薄。</div>
+  <div class="kv"><b>简历讲点：</b>后端可讲定时任务、向量重建、去重相似度判断——但这些点在项目里已有更重的场景（ES 同步、RAG），边际增量小。测开——RAG 召回评估（Recall@K/MRR）是相对新的点，但体量小。</div>
+  <div class="kv"><b>与六场景衔接：</b>与现有场景⑥（规则/费用/退款 FAQ，RAG）重复度最高：FAQ 表、向量库都已存在，B4 只是把 FAQ 的"录入方式"从手写改成"自动挖掘"。若保留，缩成一个 XXL-Job＋一个后台"待审核 FAQ"小队列即可，不必独立成大功能。</div>
+  <div class="src"><b>来源：</b><ul>
+    <li>实在智能知识库自愈闭环（厂商方案）：<a href="https://www.ai-indeed.com/encyclopedia/31668.html">https://www.ai-indeed.com/encyclopedia/31668.html</a></li>
+    <li>ZBrain FAQ Generation Agent 方案文档（开源）：<a href="https://cdn.zbrain.ai/wp-content/uploads/2025/07/10045237/FAQ-Generation-Agent-Solution-Document.pdf">https://cdn.zbrain.ai/wp-content/uploads/2025/07/10045237/FAQ-Generation-Agent-Solution-Document.pdf</a></li>
+    <li>AWS 官方博客：RAG 架构智能 Support Case 问答系统：<a href="https://aws.amazon.com/cn/blogs/china/using-large-language-models-and-rag-architecture-to-build-an-intelligent-support-case-qa-system/">https://aws.amazon.com/cn/blogs/china/using-large-language-models-and-rag-architecture-to-build-an-intelligent-support-case-qa-system/</a></li>
+    <li>My AskAI：什么是 self-learning AI（官方博客）：<a href="https://myaskai.com/blog/what-is-self-learning-ai">https://myaskai.com/blog/what-is-self-learning-ai</a></li>
+  </ul></div>
+</div>
+
+<div class="card" id="card-B5">
+  <div class="head"><h3>B5 安全/紧急意图识别</h3><span class="stars stars-h">★★★★</span></div>
+  <div class="badges"><span class="badge b-real">真实产品功能</span><span class="badge b-comm">社区讨论</span></div>
+  <div class="kv"><b>功能是什么：</b>在 AI 助手对话（及乘客-司机会话文本）中识别高风险意图——"我被困车上了/司机绕路不停车/被骚扰/我要报警"——一旦命中，立刻中断普通对话流，自动触发紧急流程：行程实时位置/路线展示给紧急联系人、模拟拨打 110、弹窗安全指引、人工客服加急介入，并给该行程打安全标记。</div>
+  <div class="kv"><b>用户真会用吗（需求证据）：</b>
+    <ul>
+      <li><span class="badge b-real">真实产品功能</span>滴滴紧急求助（2016 年上线）：按下后上传实时录音、客服监听回拨、自动发送行程信息给紧急联系人、可一键拨 110/120/122；2019 顺风车复线即带 110 报警、行程分享、路线偏移提醒。</li>
+      <li><span class="badge b-real">真实产品功能</span>滴滴安全 AI 模型（2026 官方公布）：多模态风险研判大模型融合 NLP、订单异常、行程动态做风险初筛，高危行程自动触发远程外呼、安全警示、紧急报警处置，"AI 初筛+真人复核"。</li>
+      <li><span class="badge b-real">真实产品功能</span>T3 出行：行程对话中"高风险语义"词汇触发车机端语音警示（如"能不能请你吃宵夜"即被判高风险）。</li>
+      <li><span class="badge b-comm">社区讨论</span>论文：Whisper 转写＋微调 DistilBERT 做实时言语骚扰检测，准确率 93.8%。</li>
+    </ul>
+  </div>
+  <div class="kv"><b>技术怎么实现：</b>分层——规则层先行：高危关键词/正则（报警、被困、骚扰、绕路、不停车、救命）直接命中零 token，安全场景宁可误报不可漏报，规则兜底；LLM 层：规则未命中但语义模糊的句子（如"他好像不太对劲""路线不对"）交给 LLM 做风险分类 {risk_level: high/medium/none, reason}；处置：命中 high → 不走普通 function calling，走独立紧急通道——写安全事件表、推送紧急联系人（行程分享页）、弹"模拟 110"按钮、转人工队列最高优先级、客服工作台红色弹窗。只做文本意图分类，不做语音识别。</div>
+  <div class="kv"><b>工作量与依赖：</b>2–3 人日（高危词表+分类 prompt 1d；紧急流程编排：安全事件表+行程分享推送+人工加急 1d；前端演示弹窗 0.5–1d）。外部依赖无；行程分享原方案已规划（"行程分享紧急联系人、一键报警模拟"），B5 是给它加一个"AI 自动触发"入口。演示时对着助手说"司机把车开到偏僻地方了，我好害怕"，观察系统从普通聊天瞬间切到红色紧急界面。</div>
+  <div class="kv"><b>简历讲点：</b>后端——①紧急通道与主对话链路隔离：Sentinel 对普通限流，但紧急事件走单独高优先级队列/线程池，不被高峰流量拖死；②事件驱动：命中即发 RocketMQ 事务消息，保证"推送联系人+落安全事件表+转人工"最终一致；③降级：LLM 服务挂了，规则层仍必须能兜住高危词，安全功能不能依赖 LLM 可用性；④安全事件单独埋点/Skywalking tag。测开——安全误报/漏报是核心质量指标：构造对抗样本集（正常抱怨"绕路了" vs 真正危险"被困"）评估分类准确率与召回，漏报率必须压到极低。</div>
+  <div class="kv"><b>与六场景衔接：</b>不重复：六场景都是办事，B5 是兜底安全。与原方案§四已有的"行程分享紧急联系人、一键报警（模拟）"衔接——原来那两个是用户手动点的按钮，B5 增加"AI 在对话里主动识别、自动拉起同一套紧急流程"，把手动功能升级为主动安全，叙事完整。</div>
+  <div class="src"><b>来源：</b><ul>
+    <li>滴滴紧急求助产品（滴滴官方）：<a href="https://www.didiglobal.com/news/newsDetail?id=424&amp;type=blog">https://www.didiglobal.com/news/newsDetail?id=424&amp;type=blog</a></li>
+    <li>滴滴安全 AI 模型公布（新华社）：<a href="http://www.news.cn/tech/20260425/610f6fc3bd4d434cbe63e51ab5e6bb1c/c.html">http://www.news.cn/tech/20260425/610f6fc3bd4d434cbe63e51ab5e6bb1c/c.html</a></li>
+    <li>T3 出行高风险语义语音警示（中新网上海）：<a href="https://www.sh.chinanews.com.cn/swzx/2025-12-02/142907.shtml">https://www.sh.chinanews.com.cn/swzx/2025-12-02/142907.shtml</a></li>
+    <li>言语骚扰检测论文（Semantic Scholar PDF）：<a href="https://pdfs.semanticscholar.org/90b7/34b94399c6bc0e16e47427b368492c2fe52e.pdf">https://pdfs.semanticscholar.org/90b7/34b94399c6bc0e16e47427b368492c2fe52e.pdf</a></li>
+    <li>滴滴安全体系（滴滴官方）：<a href="https://www.didiglobal.com/news/newsDetail?id=716&amp;type=blog">https://www.didiglobal.com/news/newsDetail?id=716&amp;type=blog</a></li>
+  </ul></div>
+</div>
+
+<!-- ============ 4 推荐组合 ============ -->
+<h2>四、推荐组合（4 组，构成固定）</h2>
+
+<div class="combo">
+  <h3>组合一「后端技术向」——把后端硬核点铺满</h3>
+  <p><b>包含：</b>A1 语义化行程搜索与智能撮合 ＋ B1 客服工单智能分派+会话摘要+回复草稿 ＋ B5 安全/紧急意图识别。</p>
+  <p><b>技术闭环：</b>A1 产出检索与排序链路（查询改写/两阶段召回/缓存）；B1 消费已有"转人工队列"事件走 MQ 异步，并做限流降级与 token 成本控制；B5 用规则前置拦截做零 token 兜底与独立紧急通道——三者分别落在"读多写少的检索""异步后台增效""高优隔离通道"三种后端经典问题上。</p>
+  <p><b>面试怎么讲：</b>后端岗——"ES 两阶段召回＋MQ 异步坐席摘要＋紧急通道高优隔离，限流降级全链可观测。"测开岗——"NL 解析 golden 集＋分派规则 mock 单测＋安全对抗样本召回评估。"</p>
+  <p><b>风险与代价：</b>工作量合计约 <span class="total">8–12 人日</span>（3–4＋3–5＋2–3）。最可能翻车的点：B1 后台工作台 UI 耗时超预期；LLM 摘要质量在演示现场波动——用固定 demo 对话兜底。</p>
+</div>
+
+<div class="combo">
+  <h3>组合二「测试开发向」——把测开作品集立起来</h3>
+  <p><b>包含：</b>B3 接口用例自动生成+AI 助手评估平台 ＋ A2 智能取消挽留与退改费用解释 ＋ B2 评价文本→信任标签抽取+评价摘要。</p>
+  <p><b>技术闭环：</b>B3 是 CI 里跑的 golden 集/工具调用成功率/mock LLM 回归流水线（注意：它是"工程质量平台"而非用户可见功能）；A2 的退改规则可写边界断言用例（时间窗/判责/金额精度）；B2 的标签抽取结果可做断言集——评估平台测的正是 A2、B2 这两个功能的 LLM 输出质量，形成"被测对象→评估集→CI 门禁"闭环。</p>
+  <p><b>面试怎么讲：</b>后端岗——"OpenAPI→用例异步生成服务，任务状态机＋WebSocket 进度＋CI 门禁。"测开岗——"golden 集意图准确率门禁＋退改时间窗边界断言＋标签抽取回归集。"</p>
+  <p><b>风险与代价：</b>工作量合计约 <span class="total">8–12 人日</span>（4–6＋2–3＋2–3）。最可能翻车的点：golden 集标注量（50–100 条）被低估；B3 没有 C 端演示画面，答辩要会讲 CI 看板趋势图。</p>
+</div>
+
+<div class="combo">
+  <h3>组合三「演示效果向（答辩 3 分钟）」——观众看得懂的炸点</h3>
+  <p><b>包含：</b>A2 智能取消挽留与退改费用解释 ＋ A4 行程须知卡片自动生成 ＋ B5 安全/紧急意图识别。</p>
+  <p><b>技术闭环：</b>观众能看懂"算钱＋给替代方案"（A2：用户说不去了，助手先算扣款再给改时间选项）；A4 生成图文卡片有视觉冲击；B5 说"我要求报警"直接触发紧急通道（普通聊天秒切红色界面）——一个讲理、一个好看、一个震撼。</p>
+  <p><b>面试怎么讲：</b>后端岗——"取消判责状态机＋延时任务触发须知卡片＋安全事件事务消息最终一致。"测开岗——"时间窗临界点断言＋卡片完整性校验＋漏报率压到极低的对抗集。"</p>
+  <p><b>风险与代价：</b>工作量合计约 <span class="total">5.5–8 人日</span>（2–3＋1.5–2＋2–3）。最可能翻车的点：A4 卡片前端视觉效果依赖设计感；整套演示全靠"算钱"和"红色紧急界面"两个炸点撑住。</p>
+</div>
+
+<div class="combo">
+  <h3>组合四「最低成本保底（3–4 人日）」——两天可上线演示</h3>
+  <p><b>包含：</b>A3 优惠组合与省钱建议 ＋ A4 行程须知卡片自动生成。</p>
+  <p><b>技术闭环：</b>两者都是对已有数据（券/价格/订单/天气）的再加工，不新增外部链路：A3 复用已有券引擎做离线试算，A4 复用通知模块的延时消息与已有天气链路——技术风险最低。</p>
+  <p><b>面试怎么讲：</b>后端岗——"试算与实付共用一条规则链保证一致性，算价结果短缓存＋推送频控。"测开岗——"券互斥/门槛/精度边界用例集，直接复用作结算引擎测试展示窗口。"</p>
+  <p><b>风险与代价：</b>工作量合计约 <span class="total">3.5–4 人日</span>（2＋1.5–2）。最可能翻车的点：试算价与实付价不一致穿帮（必须共用规则代码）；技术叙事最薄，只适合作为时间不够时的保底方案。</p>
+</div>
+
+<!-- ============ 5 不建议做的 ============ -->
+<h2>五、不建议做的与理由</h2>
+<div class="excl">
+  <b>A5 一键生成"求拼车"分享文案（建议砍掉）：</b>真实产品分享的是行程卡片/邀请链接（带状态、可直接接单），"AI 生成营销文案"这个形态未找到真实产品对应；纯 LLM 一个调用就完，后端讲不出并发/缓存/幂等任何硬核点，测开无边界矩阵，且个人项目不上线、文案无传播出口。若舍不得，降级为场景4 guidePublish 或 A4 卡片的附属按钮，不单列。
+</div>
+<div class="excl">
+  <b>B4 FAQ 自动挖掘与 RAG 自更新（建议砍掉/最小化）：</b>与现有场景⑥（FAQ RAG）共享同一知识库，FAQ 表与向量库都已存在，重复度最高；个人项目工单是 mock 出来的几十条，"自动挖高频问题"演示时挖不出真实痛点，会变成"跑了个定时任务、生成两条 FAQ"。可保留为一个 XXL-Job＋后台"待审核 FAQ"小队列，一句话带过即可，不投入独立开发量。
+</div>
+
+<!-- ============ 6 证据与口径说明 ============ -->
+<h2>六、证据与口径说明</h2>
+<div class="lead">
+  <p><b>证据类型图例（徽章与明细标注一致，共五类）：</b></p>
+  <div class="legend">
+    <span><span class="badge b-real">真实产品功能</span>竞品 App/官方产品里确实存在，附官方产品页/帮助中心链接</span>
+    <span><span class="badge b-doc">官方文档</span>厂商文档、官方公告、官方博客、GitHub/README、OpenAPI 规范</span>
+    <span><span class="badge b-comm">社区讨论</span>媒体实测、技术社区、论文等第三方佐证（含 arXiv/EMNLP 论文，按上游明细归入此类），只能作佐证，不能单独支撑"用户真会用"</span>
+    <span><span class="badge b-os">开源项目</span>开源工具/开源方案文档（PyPI、ZBrain 等）</span>
+    <span><span class="badge b-infer">推断</span>无一手证据，已写清推断依据；A5 核心形态无真实产品对应，对比表中标注"仅推断"</span>
+  </div>
+  <p><b>口径说明：</b>本报告全部事实仅取自两份上游调研明细（A 组交易体验侧、B 组服务质量侧），未新增竞品功能、未新增链接、未编造 star 数或论文；两文件覆盖的候选互不重叠，无需要裁决的冲突项。工作量、竞品名、功能描述与证据类型标注均按明细原样沿用。</p>
+  <p><b>链接实测口径：</b>本报告引用的 42 条来源链接均于 2026-10-28 做可达性实测，40 条返回正常、1 条为站点反爬（412，已在 B2 卡片加注）、1 条已改用同文 abs 地址（RESTifAI 论文由 /html/ 变体改为 /abs/ 地址）。</p>
+  <p>各候选完整来源清单见第三节对应卡片末尾；本页所有链接均可点击，URL 参数逐字保留未做短链化。</p>
+</div>
+
+</div>
+</body>
+</html>

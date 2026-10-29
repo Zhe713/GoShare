@@ -1,0 +1,12 @@
+server:
+  port: 8002
+
+spring:
+  application:
+    name: go-share-trip-server
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

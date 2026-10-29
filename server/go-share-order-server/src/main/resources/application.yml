@@ -1,0 +1,12 @@
+server:
+  port: 8003
+
+spring:
+  application:
+    name: go-share-order-server
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

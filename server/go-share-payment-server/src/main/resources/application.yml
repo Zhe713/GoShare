@@ -1,0 +1,12 @@
+server:
+  port: 8005
+
+spring:
+  application:
+    name: go-share-payment-server
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info

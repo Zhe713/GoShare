@@ -1,0 +1,1159 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>GoShare 省 Token 架构调研报告 v2</title>
+<style>
+  :root{
+    --bg:#f4f5f7;
+    --card:#ffffff;
+    --ink:#161a1f;
+    --ink-2:#3d4652;
+    --muted:#68717d;
+    --line:#e2e6ea;
+    --line-2:#cfd5dc;
+    --teal:#0f766e;
+    --teal-2:#0b5c56;
+    --teal-bg:#e8f4f1;
+    --amber:#a45c00;
+    --amber-bg:#fdf3e3;
+    --red:#b3261e;
+    --red-bg:#fdecea;
+    --blue:#1d4ed8;
+    --blue-bg:#eef2ff;
+    --green:#15803d;
+    --green-bg:#e9f6ee;
+    --radius:14px;
+    --shadow:0 1px 2px rgba(16,24,32,.04), 0 6px 20px rgba(16,24,32,.06);
+  }
+  *{box-sizing:border-box}
+  html{-webkit-text-size-adjust:100%}
+  body{
+    margin:0;
+    background:var(--bg);
+    color:var(--ink);
+    font-family:system-ui,-apple-system,"Segoe UI","Microsoft YaHei","PingFang SC","Hiragino Sans GB",sans-serif;
+    font-size:16px;
+    line-height:1.78;
+    -webkit-font-smoothing:antialiased;
+  }
+  code,kbd,pre,.mono{font-family:ui-monospace,SFMono-Regular,Consolas,"Liberation Mono",Menlo,monospace}
+  a{color:var(--teal-2);text-underline-offset:3px}
+  a:hover{color:var(--teal)}
+
+  /* ---------- 封面 ---------- */
+  .hero{
+    background:
+      radial-gradient(1200px 400px at 80% -10%, rgba(15,118,110,.14), transparent 60%),
+      radial-gradient(900px 340px at 10% 0%, rgba(164,92,0,.10), transparent 55%),
+      #fbfcfd;
+    border-bottom:1px solid var(--line);
+    padding:72px 24px 56px;
+  }
+  .hero-inner{max-width:1080px;margin:0 auto}
+  .eyebrow{
+    margin:0 0 18px;font-size:13px;letter-spacing:.16em;text-transform:uppercase;
+    color:var(--teal);font-weight:700;
+  }
+  .hero h1{
+    margin:0;font-size:clamp(30px,4.4vw,46px);line-height:1.28;letter-spacing:-.01em;font-weight:800;
+  }
+  .hero h1 span{
+    display:block;margin-top:14px;font-size:clamp(17px,2vw,22px);font-weight:500;color:var(--ink-2);line-height:1.6;
+  }
+  .lede{
+    margin:26px 0 0;max-width:820px;font-size:16.5px;color:var(--ink-2);
+  }
+  .meta{
+    margin-top:26px;display:flex;flex-wrap:wrap;gap:8px 10px;font-size:13px;color:var(--muted);
+  }
+  .meta span{
+    background:#fff;border:1px solid var(--line);border-radius:999px;padding:4px 12px;
+  }
+
+  /* ---------- 导航 ---------- */
+  .toc{
+    position:sticky;top:0;z-index:20;background:rgba(255,255,255,.92);
+    backdrop-filter:saturate(160%) blur(10px);
+    border-bottom:1px solid var(--line);
+  }
+  .toc-inner{
+    max-width:1080px;margin:0 auto;padding:11px 24px;display:flex;flex-wrap:wrap;gap:4px 6px;
+    font-size:13.5px;
+  }
+  .toc a{
+    color:var(--ink-2);text-decoration:none;padding:5px 9px;border-radius:8px;white-space:nowrap;
+  }
+  .toc a:hover{background:var(--teal-bg);color:var(--teal-2)}
+  .toc a b{color:var(--teal);font-weight:700;margin-right:4px}
+
+  /* ---------- 正文 ---------- */
+  main{max-width:1080px;margin:0 auto;padding:8px 24px 96px}
+  section{padding-top:56px}
+  .sec-head{display:flex;align-items:flex-start;gap:14px;margin-bottom:10px}
+  .sec-num{
+    flex:0 0 auto;width:42px;height:42px;border-radius:12px;background:var(--teal);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:17px;letter-spacing:.02em;
+  }
+  h2{margin:0;font-size:clamp(22px,2.6vw,28px);line-height:1.35;font-weight:800;letter-spacing:-.01em}
+  h2 small{display:block;font-size:14px;font-weight:500;color:var(--muted);margin-top:4px;letter-spacing:0}
+  h3{font-size:19px;margin:34px 0 12px;font-weight:700}
+  h4{font-size:16px;margin:22px 0 8px;font-weight:700;color:var(--ink)}
+  p{margin:12px 0}
+  ul,ol{margin:12px 0;padding-left:22px}
+  li{margin:6px 0}
+  .muted{color:var(--muted)}
+  .small{font-size:13.5px}
+
+  /* ---------- 卡片 ---------- */
+  .card{
+    background:var(--card);border:1px solid var(--line);border-radius:var(--radius);
+    padding:22px 24px;box-shadow:var(--shadow);margin:18px 0;
+  }
+  .card.tight{padding:18px 20px}
+  .grid-2{display:grid;grid-template-columns:repeat(auto-fit,minmax(320px,1fr));gap:16px;margin:18px 0}
+  .grid-3{display:grid;grid-template-columns:repeat(auto-fit,minmax(240px,1fr));gap:16px;margin:18px 0}
+
+  /* 章节引言 */
+  .lead{
+    background:#fff;border-left:4px solid var(--teal);border-radius:0 12px 12px 0;
+    padding:16px 20px;margin:18px 0 8px;color:var(--ink-2);box-shadow:var(--shadow);
+  }
+
+  /* ---------- 标签 ---------- */
+  .tag{
+    display:inline-flex;align-items:center;gap:5px;font-size:12px;font-weight:700;
+    padding:2px 9px;border-radius:999px;border:1px solid transparent;white-space:nowrap;
+    vertical-align:middle;line-height:1.7;
+  }
+  .t-real{background:var(--green-bg);color:var(--green);border-color:#bfe3cb}
+  .t-pub{background:var(--blue-bg);color:var(--blue);border-color:#c7d2fe}
+  .t-est{background:var(--amber-bg);color:var(--amber);border-color:#ecd4a8}
+  .t-old{background:#f0f1f3;color:#5b646f;border-color:#dde1e6}
+  .t-new{background:var(--teal-bg);color:var(--teal-2);border-color:#b9ded8}
+  .t-risk{background:var(--red-bg);color:var(--red);border-color:#f3c6c1}
+
+  /* ---------- 提示块 ---------- */
+  .callout{border-radius:12px;padding:14px 18px;margin:18px 0;border:1px solid;font-size:15px}
+  .callout h4{margin:0 0 6px;font-size:15px}
+  .callout p{margin:6px 0}
+  .c-warn{background:var(--red-bg);border-color:#f3c6c1;color:#7f1d1a}
+  .c-tip{background:var(--teal-bg);border-color:#b9ded8;color:#0b4f49}
+  .c-note{background:#f7f8fa;border-color:var(--line-2);color:var(--ink-2)}
+  .c-est{background:var(--amber-bg);border-color:#ecd4a8;color:#6b3f00}
+
+  /* ---------- 表格 ---------- */
+  .table-wrap{
+    overflow-x:auto;border:1px solid var(--line);border-radius:var(--radius);background:#fff;
+    box-shadow:var(--shadow);margin:18px 0;
+  }
+  table{border-collapse:collapse;width:100%;font-size:14px;min-width:0}
+  thead th{
+    position:sticky;top:0;background:#f0f3f5;color:var(--ink);text-align:left;font-weight:700;
+    padding:11px 13px;border-bottom:1px solid var(--line-2);white-space:normal;font-size:13.5px;
+  }
+  tbody td{padding:11px 13px;border-bottom:1px solid var(--line);vertical-align:top;line-height:1.65;overflow-wrap:anywhere;word-break:break-word}
+  tbody tr:last-child td{border-bottom:none}
+  tbody tr:nth-child(even) td{background:#fbfcfd}
+  td.center,th.center{text-align:center}
+  .tbl-compact table{font-size:13.5px;min-width:640px}
+  .val-good{color:var(--green);font-weight:700}
+  .val-mid{color:var(--amber);font-weight:700}
+  .val-bad{color:var(--red);font-weight:700}
+
+  /* ---------- 方案卡 ---------- */
+  .scheme{
+    background:#fff;border:1px solid var(--line);border-radius:var(--radius);
+    margin:22px 0;box-shadow:var(--shadow);overflow:hidden;
+  }
+  .scheme-head{
+    display:flex;flex-wrap:wrap;align-items:center;gap:10px;
+    padding:16px 22px;background:linear-gradient(180deg,#fbfdfd,#f5f8f8);border-bottom:1px solid var(--line);
+  }
+  .scheme-no{
+    width:30px;height:30px;border-radius:9px;background:var(--teal);color:#fff;
+    display:flex;align-items:center;justify-content:center;font-weight:800;font-size:15px;flex:0 0 auto;
+  }
+  .scheme-head h3{margin:0;font-size:18px;font-weight:800}
+  .scheme-head .en{font-size:12.5px;color:var(--muted);font-weight:500}
+  .scheme-body{padding:6px 22px 18px}
+  .row{display:grid;grid-template-columns:104px 1fr;gap:14px;padding:12px 0;border-bottom:1px dashed var(--line)}
+  .row:last-child{border-bottom:none}
+  .row .k{font-size:13px;font-weight:700;color:var(--teal-2);letter-spacing:.02em}
+  .row .v{font-size:15px;color:var(--ink-2)}
+  .row .v p:first-child{margin-top:0}
+  .row .v p:last-child{margin-bottom:0}
+  .row .v ul{margin:6px 0}
+  .metric{
+    display:inline-block;background:var(--teal-bg);border:1px solid #b9ded8;color:var(--teal-2);
+    border-radius:8px;padding:1px 8px;font-weight:700;font-family:ui-monospace,Consolas,monospace;font-size:13.5px;
+  }
+
+  /* ---------- 流程图 ---------- */
+  .flow{display:flex;flex-wrap:wrap;align-items:stretch;gap:8px;margin:16px 0}
+  .flow-step{
+    flex:1 1 130px;background:#fff;border:1px solid var(--line-2);border-radius:10px;
+    padding:10px 12px;font-size:13px;line-height:1.55;box-shadow:0 1px 2px rgba(16,24,32,.04);
+  }
+  .flow-step b{display:block;font-size:13px;color:var(--ink);margin-bottom:2px}
+  .flow-step em{font-style:normal;color:var(--muted);font-size:12px}
+  .flow-step.hit{border-color:#b9ded8;background:var(--teal-bg)}
+  .flow-step.miss{border-color:#ecd4a8;background:var(--amber-bg)}
+  .flow-step.fail{border-color:#f3c6c1;background:var(--red-bg)}
+  .arrow{align-self:center;color:var(--line-2);font-weight:800;font-size:16px}
+
+  /* ---------- 架构卡 ---------- */
+  .arch{
+    background:#fff;border:1px solid var(--line);border-radius:var(--radius);box-shadow:var(--shadow);
+    margin:24px 0;overflow:hidden;
+  }
+  .arch-head{padding:18px 24px;border-bottom:1px solid var(--line);background:linear-gradient(180deg,#fbfdfd,#f6f9f9)}
+  .arch-head h3{margin:0 0 4px;font-size:19px}
+  .arch-head p{margin:0;font-size:14px;color:var(--muted)}
+  .arch-body{padding:8px 24px 20px}
+  .arch-block{
+    border-top:1px dashed var(--line);padding:14px 0;
+  }
+  .arch-block:first-child{border-top:none}
+  .arch-block h4{margin:0 0 6px;font-size:14.5px;color:var(--teal-2);letter-spacing:.02em}
+
+  /* ---------- 数据条 ---------- */
+  .kpis{display:grid;grid-template-columns:repeat(auto-fit,minmax(220px,1fr));gap:12px;margin:16px 0}
+  .kpi{background:#fff;border:1px solid var(--line);border-radius:12px;padding:14px 16px;box-shadow:var(--shadow)}
+  .kpi .n{font-size:26px;font-weight:800;color:var(--teal-2);line-height:1.2;font-variant-numeric:tabular-nums}
+  .kpi .n small{font-size:14px;font-weight:700}
+  .kpi .lbl{font-size:12.5px;color:var(--muted);margin-top:4px;line-height:1.5}
+
+  /* ---------- 代码 ---------- */
+  pre{
+    background:#12171c;color:#e6edf3;border-radius:12px;padding:16px 18px;overflow:auto;
+    font-size:13px;line-height:1.65;margin:14px 0;
+  }
+  pre .cm{color:#8b98a5}
+  code.inline{
+    background:#eef1f4;border-radius:5px;padding:1px 6px;font-size:13.5px;color:#24303c;
+  }
+
+  /* ---------- 来源 ---------- */
+  .src-list{list-style:none;padding:0;margin:14px 0;counter-reset:src}
+  .src-list li{
+    counter-increment:src;position:relative;padding:9px 0 9px 34px;border-bottom:1px dashed var(--line);
+    font-size:14px;line-height:1.6;
+  }
+  .src-list li:before{
+    content:counter(src);position:absolute;left:0;top:9px;width:22px;height:22px;border-radius:6px;
+    background:var(--teal-bg);color:var(--teal-2);font-size:11.5px;font-weight:800;
+    display:flex;align-items:center;justify-content:center;
+  }
+  .src-list li .url{display:block;color:var(--muted);font-size:12.5px;word-break:break-all;margin-top:2px}
+
+  /* ---------- 页脚 ---------- */
+  footer{
+    border-top:1px solid var(--line);background:#fff;padding:36px 24px 48px;color:var(--muted);font-size:13.5px;
+  }
+  footer .inner{max-width:1080px;margin:0 auto}
+
+  @media (max-width:640px){
+    body{font-size:15.5px}
+    table{min-width:660px}
+    .hero{padding:48px 18px 40px}
+    main{padding:0 16px 72px}
+    .row{grid-template-columns:1fr;gap:4px}
+    .row .k{padding-top:2px}
+    .card{padding:18px}
+    .scheme-head,.scheme-body,.arch-head,.arch-body{padding-left:16px;padding-right:16px}
+  }
+  @media print{
+    body{background:#fff}
+    .toc{display:none}
+    .hero{padding:24px 0}
+    section{page-break-inside:avoid}
+    .scheme,.arch,.card{box-shadow:none}
+  }
+</style>
+</head>
+<body>
+
+<header class="hero">
+  <div class="hero-inner">
+    <p class="eyebrow">GoShare · 顺风拼车平台 · AI 成本设计</p>
+    <h1>大模型怎么少花钱
+      <span>六类省 Token 架构调研，与三套能直接写进项目的组合方案</span>
+    </h1>
+    <p class="lede">
+      这份报告回答一个问题：GoShare 的三个 AI 功能（搜行程、工单分派、取消挽留）怎么少花大模型的钱，同时不让答案质量下降。上一版我们沿用了文档问答项目的「本地嵌入 + 重排 + 三层漏斗」思路，它只提升相关性、不省 token，还多吃内存；本次换整套思路：能命中缓存就不调模型，能让免费小模型答就不叫贵模型，调之前把输入 token 钉死，每一笔调用都记账。读完你能拿到：六类省 token 做法的取舍依据、三套能直接写进项目的组合架构（甲/乙/丙）、14 条可落地测试用例，以及一份带算式的成本算例——面试被追问「你怎么证明省了钱」时可以直接照着答。
+    </p>
+    <div class="meta">
+      <span>版本 v2.0</span>
+      <span>2026-10-28</span>
+      <span>适用：Java 17 + Spring Boot 3</span>
+      <span>旧版（三层漏斗）已废弃</span>
+    </div>
+  </div>
+</header>
+
+<nav class="toc">
+  <div class="toc-inner">
+    <a href="#s0"><b>00</b>先看这页</a>
+    <a href="#s1"><b>01</b>旧方案为什么不用了</a>
+    <a href="#s2"><b>02</b>六类做法逐个拆</a>
+    <a href="#s3"><b>03</b>一张表选方案</a>
+    <a href="#s4"><b>04</b>三套组合架构</a>
+    <a href="#s5"><b>05</b>落到三个 AI 功能</a>
+    <a href="#s6"><b>06</b>怎么测、怎么证明省钱</a>
+    <a href="#s7"><b>07</b>落地顺序与成本</a>
+    <a href="#s8"><b>08</b>来源汇总</a>
+  </div>
+</nav>
+
+<main>
+
+<!-- ============ 00 ============ -->
+<section id="s0">
+  <div class="sec-head">
+    <div class="sec-num">00</div>
+    <h2>先看这页<small>三分钟读出结论，不看你不想看的部分</small></h2>
+  </div>
+
+  <div class="lead">
+    一句话总纲：把每一次 AI 请求都当成一笔要花钱的开销——先过一道越来越便宜的关，能不调模型就不调，调的时候把输入压到最小，最后每一笔都留下账。
+  </div>
+
+  <div class="kpis">
+    <div class="kpi">
+      <div class="n">¥1.99<small>/天</small></div>
+      <div class="lbl">甲套组合预估日成本 <span class="tag t-est">推断</span><br>基线 ¥7.8/天，按 2026-10-28 官方价、1000 次/天推算，省约 74%</div>
+    </div>
+    <div class="kpi">
+      <div class="n">1/50</div>
+      <div class="lbl">DeepSeek 磁盘缓存命中价 <span class="tag t-pub">公开数据</span><br>命中 ¥0.02/M vs 未命中 ¥1/M，代码一行不用改</div>
+    </div>
+    <div class="kpi">
+      <div class="n">85%<small>+</small></div>
+      <div class="lbl">RouteLLM 路由降本 <span class="tag t-pub">公开数据</span><br>LMSYS 官方博客：相比全程 GPT-4，同时保住约 95% 表现</div>
+    </div>
+    <div class="kpi">
+      <div class="n">60%</div>
+      <div class="lbl">离线预计算覆盖目标 <span class="tag t-est">推断</span><br>覆盖到的请求读时 0 token；该数字需项目实测后替换</div>
+    </div>
+  </div>
+
+  <h3>数字怎么读：本报告的可信度标注</h3>
+  <div class="grid-3">
+    <div class="card tight">
+      <p><span class="tag t-real">实测</span></p>
+      <p class="small muted">我们跑出来的，或论文/官方文档给出的明确测量值，附实验条件。</p>
+    </div>
+    <div class="card tight">
+      <p><span class="tag t-pub">公开数据</span></p>
+      <p class="small muted">官方定价页、官方文档、开源仓库 README 上写明的数字，注明查询日期。</p>
+    </div>
+    <div class="card tight">
+      <p><span class="tag t-est">推断</span></p>
+      <p class="small muted">按公开参数推算的估算值，给出算式；项目真实跑起来后应用实测值替换。</p>
+    </div>
+  </div>
+
+  <div class="callout c-note">
+    <h4>这份报告怎么用</h4>
+    <p>① 先翻第 03 节的对比表和打分矩阵，五分钟知道六类手段哪几个值得做、哪个只是谈资。</p>
+    <p>② 按你要演示的功能（A1 搜行程 / B1 工单 / A2 挽留）直接看第 05 节，每个功能配哪几层已经定好，照抄即可。</p>
+    <p>③ 所有「省了多少」的数字都带算式，动手前自己复算一遍；面试被追问时能立刻报出依据，而不是背结论。</p>
+  </div>
+</section>
+
+<!-- ============ 01 ============ -->
+<section id="s1">
+  <div class="sec-head">
+    <div class="sec-num">01</div>
+    <h2>旧方案为什么不继续用<small>先划清界线，新方案才不会被写成旧方案的翻版</small></h2>
+  </div>
+
+  <p>上一版 GoShare 的 AI 助手沿用了 ai-doc-lint 的做法。它对「文档问答」有效，但对这个项目有三个硬伤：一是本地嵌入模型要额外内存和启动时间，个人电脑跑微服务已经很紧张；二是重排只提升相关性，不省调用次数；三是三层漏斗的关键词规则要人肉维护，新问题一多就漏。本次要换的是<strong>整套思路</strong>，不是换一个向量库。</p>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th style="width:150px">维度</th><th>旧方案（ai-doc-lint，本次要避开）</th><th>新方案的方向</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>核心目标</td><td>从大量文档里找对片段，提升召回与相关性</td><td>同样的问答重复出现时，少调用、少传上下文</td></tr>
+        <tr><td>主要手段</td><td>本地向量嵌入 + 重排 + 关键词规则漏斗 + pgvector</td><td>问题指纹版本化缓存 + 免费小模型先行（自检不过才升级）+ 固定前缀白蹭厂商缓存 + 工具结果字段白名单 + 统一网关记账</td></tr>
+        <tr><td>额外依赖</td><td>本地嵌入模型、pgvector 扩展、重排模型</td><td>无本地嵌入模型、无 pgvector、无重排器；只多几张普通 MySQL 表（t_llm_call_log 等）和 Caffeine 内存缓存，零额外容器</td></tr>
+        <tr><td>触发条件</td><td>每次请求都走一遍检索链</td><td>请求先过缓存与路由两道关，命中即结束；只有未命中、自检不过的请求才真正花钱调模型</td></tr>
+        <tr><td>省不省 token</td><td>几乎不省：检索完照样把片段塞进 prompt</td><td>直接省：命中请求的输入输出 token 全为 0；未命中请求靠滑动窗口和字段白名单把输入钉在约 1800 token，再叠前缀命中按 1 折计费</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>本次设计的三条原则</h3>
+  <div class="grid-3">
+    <div class="card tight"><h4>① 先便宜后贵</h4><p class="small muted">每个请求先问免费或几分钱的小模型（GLM-4.7-Flash 免费档），自检不过才升级贵模型；升级只允许一次，不允许两个模型来回跳。便宜答案和贵答案质量接近时，永远先交便宜的那份。</p></div>
+    <div class="card tight"><h4>② 能不调就不调</h4><p class="small muted">答案能从缓存池、预计算池、模板库里直接读的，一律不进模型，连大模型的门都不让它碰。带实时数据的问题（「我的订单到哪了」）是例外，走实时但只回写不查询。</p></div>
+    <div class="card tight"><h4>③ 每一笔都记账</h4><p class="small muted">每次调用记录场景、模型、input/output token 和花费，token 一律取响应 usage 字段、不用本地估算。没有记账的「省了多少」在面试里等于没说。</p></div>
+  </div>
+</section>
+
+<!-- ============ 02 ============ -->
+<section id="s2">
+  <div class="sec-head">
+    <div class="sec-num">02</div>
+    <h2>六类做法逐个拆<small>每类都回答同一组问题，方便横向比较</small></h2>
+  </div>
+
+  <div class="lead">
+    六张卡片按固定顺序排列：① 语义缓存、② 模型分级、③ 上下文压缩、④ 厂商前缀缓存 + 批处理、⑤ 网关与配额、⑥ 其他手段。每张卡回答同一组七个问题：一句话原理、省多少、Java 怎么落、可行性、怎么测、坑、来源。读的时候先看「省多少」和「坑」两行，再决定要不要往下深究。
+  </div>
+
+  <!-- ============ 方案 1 ============ -->
+  <article class="scheme">
+    <div class="scheme-head">
+      <div class="scheme-no">1</div>
+      <div>
+        <h3>问过的问题直接答（语义缓存）</h3>
+        <div class="en">QuestionCacheService · 代表项目 GPTCache</div>
+      </div>
+      <span class="tag t-new">推荐</span>
+    </div>
+    <div class="scheme-body">
+      <div class="row"><div class="k">一句话原理</div><div class="v"><p>用户问题先算一个指纹（归一化哈希为主、便宜 embedding 相似度为辅），和缓存里历史问答比一比；超过阈值就把上次给过的答案原文返回，完全不碰大模型；没命中才去调模型，调完把「问题指纹 → 答案」带版本号写回缓存。</p></div></div>
+      <div class="row"><div class="k">省多少</div><div class="v">
+         <p>机制：命中请求的输入和输出 token 都为 0，只付一次极便宜的指纹计算；GPTCache 官方论文称命中时响应快 2–10 倍。<span class="tag t-pub">公开数据</span></p>
+         <p>量级：拼车 FAQ 类问题天然高频重复，推断命中率 30%–60%，演示集 warm-up 后可冲 80%+；命中率 50% 时整体 LLM 费用约省 40%–50%，80% 时省 75%+。<span class="tag t-est">推断</span></p>
+      </div></div>
+      <div class="row"><div class="k">Java 怎么落</div><div class="v">
+         <p>库/组件：Caffeine 存答案原文 + LRU 淘汰（上限 1000–2000 条、TTL 7 天）；条目少于 2000 条时内存暴力余弦即可，不引 FAISS、不引 pgvector。</p>
+         <p>要不要额外服务：不要。指纹相似度走 OpenAI 兼容接口调几分钱的 embedding 接口即可，不要为它装本地 bge 模型。</p>
+         <p>关键设计：缓存 key = 模型名 + 功能域命名空间（模型升级后旧答案整体失效）；相似度阈值起步 0.90，上线前拿 20–30 组「同义改写 vs 形近义反」标注对校准；带实时数据的问题只回写不查询。</p>
+         <p>与旧方案的区别：旧方案向量里存的是「文档切片」，命中后取出片段拼 prompt 再调一次 LLM，路径上还有 reranker 重排；这里比的是「用户问过的问题 + 给过的答案」，命中直接返答案原文，路径上没有重排、不进 pgvector。如果只是把 bge 换成别的向量库、检索完照样拼 prompt 调模型，那仍是旧方案同类，慎用——面试官一眼能看出和上一个项目是同一套东西，简历没有增量。</p>
+      </div></div>
+      <div class="row"><div class="k">可行性</div><div class="v"><p>外部依赖只有一个 embedding 接口（有免费额度），不要 GPU、不要向量数据库；测试时指纹计算和大模型都用接口替身，本地一条 Redis 都不用起。Caffeine 纯内存、重启丢缓存——演示项目正好用来展示「冷启动 miss → 回热后 hit」。</p></div></div>
+      <div class="row"><div class="k">怎么测</div><div class="v">
+         <ul>
+           <li>同一句话问两次：第二次模型调用次数 = 0，返回答案一致。</li>
+           <li>意思相反的两句话不串答案：「怎么取消订单」与「订单如何取消」判命中，「允许拼车」与「禁止拼车」判不命中。</li>
+           <li>阈值边界：构造 0.89 / 0.91 两组指纹，断言 0.89 miss、0.91 hit。</li>
+           <li>缓存写满：上限 1000 条时最久未访问的被 LRU 淘汰；TTL 过期后重新调模型并回写。</li>
+           <li>命名空间隔离：换模型后旧条目不命中。</li>
+         </ul>
+      </div></div>
+      <div class="row"><div class="k">坑</div><div class="v">
+         <ul>
+           <li>误命中：触发条件是阈值低于 0.85、形近义反问题多；后果是把「禁止拼车」答成「允许拼车」，涉及钱和规则类问题直接答反；防法是阈值不低于 0.85，钱/规则类问题宁可 miss。</li>
+           <li>阈值拍脑袋：触发条件是不拿标注对校准就上线；后果是命中率惨淡或误命中频发，缓存形同虚设；防法是上线前用 20–30 组标注对校准一次。</li>
+           <li>模型升级后答案过期：触发条件是缓存 key 没带模型名和数据版本；后果是把旧模型答案当新模型答案吐出去（面试高频追问点）；防法是 key = 模型名 + 功能域 + 数据版本号。</li>
+           <li>多轮对话不能缓存：触发条件是把依赖上文的问答塞进缓存；后果是答案缺上下文、被截断；防法是只缓存单轮 FAQ，多轮走实时。</li>
+         </ul>
+      </div></div>
+      <div class="row"><div class="k">来源</div><div class="v small">
+         <p>1. GPTCache GitHub README <a href="https://github.com/zilliztech/GPTCache">https://github.com/zilliztech/GPTCache</a></p>
+         <p>2. GPTCache 官方文档（embedding 实现 / 相似度判定 / LRU-FIFO） <a href="https://gptcache.readthedocs.io/en/stable/">https://gptcache.readthedocs.io/en/stable/</a></p>
+         <p>3. GPTCache ACL 2023 论文（架构 + 2–10x 延迟数据） <a href="https://aclanthology.org/anthology-files/anthology-files/pdf/nlposs/2023.nlposs-1.24.pdf">https://aclanthology.org/anthology-files/anthology-files/pdf/nlposs/2023.nlposs-1.24.pdf</a></p>
+         <p>4. Spring AI 官方文档：Redis 向量库语义缓存 advisor <a href="https://docs.spring.io/spring-ai/reference/2.0/api/vectordbs/redis.html">https://docs.spring.io/spring-ai/reference/2.0/api/vectordbs/redis.html</a></p>
+      </div></div>
+    </div>
+  </article>
+
+  <!-- ============ 方案 2 ============ -->
+  <article class="scheme">
+    <div class="scheme-head">
+      <div class="scheme-no">2</div>
+      <div>
+        <h3>简单题小模型做（模型分级路由）</h3>
+        <div class="en">ModelRouterService · 代表思想 RouteLLM / FrugalGPT</div>
+      </div>
+      <span class="tag t-new">推荐</span>
+    </div>
+    <div class="scheme-body">
+      <div class="row"><div class="k">一句话原理</div><div class="v"><p>不是所有问题都配得上大模型。先用规则把问题分流，简单问题直接交给便宜小模型答；小模型答完做一次自检（输出必须是约定 JSON、字段齐全），拿不准的再升级调用大模型。思想源自 RouteLLM（按 query 走强模型还是弱模型）和 FrugalGPT（LLM 级联）。</p></div></div>
+      <div class="row"><div class="k">省多少</div><div class="v">
+         <p>机制：把原本 100% 打给大模型的请求，切一部分给便宜 5–10 倍的小模型，只有小模型心虚时才升级一次。</p>
+         <p>量级：RouteLLM 相比全程 GPT-4，MT-Bench 成本降 85%+、MMLU 降 45%、GSM8K 降 35%，同时保住 GPT-4 约 95% 的表现。<span class="tag t-pub">公开数据</span> FrugalGPT 级联最高省 98% 即可追平 GPT-4 单模型表现。<span class="tag t-pub">公开数据</span> 本项目推断：70% 走小模型、30% 升级，单价差按 10 倍计，成本 ≈ 0.7×0.1 + 0.3×1 = 0.37，省约 60%；演示场景升级率压到 20% 时省约 70%。<span class="tag t-est">推断</span></p>
+      </div></div>
+      <div class="row"><div class="k">Java 怎么落</div><div class="v">
+         <p>库/组件：配两个 ChatModel Bean（cheap = GLM-4.7-Flash 免费 / qwen-turbo；strong = deepseek-v4-pro），ModelRouterService 编排，基于 Spring AI ChatClient 或 LangChain4j AiServices。</p>
+         <p>要不要额外服务：不要。不跑 RouteLLM 本体（它是 Python 训练的路由器，个人项目没有标注数据可训），借思想手写规则路由器——这反而更好讲：「参考 RouteLLM 的分流思想，用规则 + 自检实现了等价级联」。</p>
+         <p>关键设计：升级判定三选一且全部免费——规则前置（难词表）、JSON Schema 校验、模型自报置信度标记；升级只发生一次；强模型超时/报错时降级返回小模型答案兜底。</p>
+      </div></div>
+      <div class="row"><div class="k">可行性</div><div class="v"><p>零 GPU，路由器就是 if/else + 一次小模型调用；两个模型 API 都有免费额度，演示成本接近 0 元；WireMock 起两个假 endpoint 分别返回「小模型答案 / 大模型答案」，测试不花一分钱。</p></div></div>
+      <div class="row"><div class="k">怎么测</div><div class="v">
+         <ul>
+           <li>简单问题只调小模型：cheap 调 1 次、strong 调 0 次。</li>
+           <li>难问题直接走强模型：含触发词/超长时 cheap 0 次、strong 1 次。</li>
+           <li>小模型 JSON 不合法：cheap 1 次 + strong 恰好 1 次，无二次升级。</li>
+           <li>强模型超时：兜底返回小模型答案，接口不报错。</li>
+           <li>路由分布：一组混合问题下，升级率落在配置区间（如 20%–40%）。</li>
+         </ul>
+      </div></div>
+      <div class="row"><div class="k">坑</div><div class="v">
+         <ul>
+           <li>静默答错：触发条件是小模型能力不足又没触发升级条件；后果是用户拿到错误答案还一脸正常；防法是升级判定规则保守，宁可多升级一次也不放行可疑答案。</li>
+           <li>自检本身也花钱：触发条件是自检靠再调一次小模型；后果等于又付一次小模型钱；防法是优先用免费的 JSON Schema 校验和关键词判断。</li>
+           <li>难词表调参：触发条件是规则太宽或太窄；后果是全走强模型（省钱失效）或质量翻车；防法是拿样本集校准，和缓存阈值用同一批标注数据。</li>
+           <li>模型迭代快：触发条件是把模型名写死在代码里；后果是便宜模型半年一换后接口失效；防法是 Bean 配置化，application.yml 里换名即可。</li>
+         </ul>
+      </div></div>
+      <div class="row"><div class="k">来源</div><div class="v small">
+         <p>1. RouteLLM 论文（arXiv 2406.18665） <a href="https://arxiv.org/abs/2406.18665">https://arxiv.org/abs/2406.18665</a></p>
+         <p>2. LMSYS 官方博客（85%/45%/35% 降本 + 95% GPT-4 表现） <a href="https://www.lmsys.org/blog/2024-07-01-routellm/">https://www.lmsys.org/blog/2024-07-01-routellm/</a></p>
+         <p>3. FrugalGPT 论文（arXiv 2305.05176，最高省 98%） <a href="https://arxiv.org/abs/2305.05176">https://arxiv.org/abs/2305.05176</a></p>
+      </div></div>
+    </div>
+  </article>
+
+  <!-- ============ 方案 3 ============ -->
+  <article class="scheme">
+    <div class="scheme-head">
+      <div class="scheme-no">3</div>
+      <div>
+        <h3>聊太久就写个小结翻篇（上下文压缩）</h3>
+        <div class="en">ConversationSummarizer + ChatWindow · 学术路线 LLMLingua-2 只调研不上线</div>
+      </div>
+      <span class="tag t-new">推荐</span>
+    </div>
+    <div class="scheme-body">
+      <div class="row"><div class="k">一句话原理</div><div class="v"><p>多轮对话不能无限带全量历史——旧消息攒够阈值就调一次便宜模型压成一段摘要，之后只带「摘要 + 最近 2 轮原文」。另有一条学术路线是 LLMLingua-2（小模型先扫一遍 prompt 删冗余 token），本项目只做调研、不上实现，原因见「坑」第三条。</p></div></div>
+      <div class="row"><div class="k">省多少</div><div class="v">
+         <p>机制：把每轮输入钉死在「摘要 + 最近 N 轮」，不再随轮次线性增长。</p>
+         <p>量级：N=5、单轮 300 token、摘要 300 token 时，10 轮对话输入恒定约 1800 token，比全量带（约 3000+ token）省约 40%–50% 输入，轮次越多省得越多。<span class="tag t-est">推断</span> LLMLingua-2 论文端到端压缩比 2x–5x（粗到细框架可达约 15x），但它是 Python 库且会破坏厂商缓存前缀，只做调研。<span class="tag t-pub">公开数据</span></p>
+      </div></div>
+      <div class="row"><div class="k">Java 怎么落</div><div class="v">
+         <p>库/组件：Spring AI 的 ChatMemory / MessageWindowChatMemory 现成窗口；自己写一个 Advisor 拦在 ChatClient 调用前，超阈值就调轻量模型生成摘要、替换旧消息。</p>
+         <p>要不要额外服务：不要。摘要时调一次 deepseek-flash 即可（输入 ¥1/M）。</p>
+         <p>关键设计：阈值用 jtokkit 数 token 而不是数消息条数；摘要 prompt 固定不动；摘要块放可变区（固定系统提示在前），保留厂商缓存前缀；摘要里必须写死出发地/目的地/时间/人数四个槽位。</p>
+      </div></div>
+      <div class="row"><div class="k">可行性</div><div class="v"><p>纯 JVM 内规则，无向量、无 rerank、无 pgvector，和旧方案完全不同类；可 mock（本地写死一段摘要测管道）；换厂商零成本，逻辑全在 JVM 内。</p></div></div>
+      <div class="row"><div class="k">怎么测</div><div class="v">
+         <ul>
+           <li>灌 20 轮对话：发往模型的历史 token 永远 ≤ 阈值 + 单轮。</li>
+           <li>摘要保槽位：金标断言摘要里仍保留出发地/目的地/时间/人数。</li>
+           <li>最近 2 轮逐字保留：断言未被摘要吞掉。</li>
+           <li>压缩 sidecar 关掉时：断言降级发原文、不抛异常。</li>
+         </ul>
+      </div></div>
+      <div class="row"><div class="k">坑</div><div class="v">
+         <ul>
+           <li>摘要丢细节：触发条件是摘要 prompt 没写死槽位清单；后果是「我要带个 24 寸箱子」这类约束被压没，模型答非所问；防法是槽位清单写进摘要 prompt，并用金标单测对齐。</li>
+           <li>破坏厂商缓存：触发条件是把摘要块放在固定前缀区、且每轮内容都变；后果是前缀不稳定、厂商缓存全废；防法是摘要块放可变区末尾，固定系统提示在前。</li>
+           <li>LLMLingua-2 互斥：触发条件是真跑本地压缩模型；后果是压缩位置每次不同毁掉前缀稳定，还要多养一个 560MB 的 Python 小模型，和旧项目气味重叠；防法是只做设计不做实现，简历写「调研后因与磁盘缓存互斥、中文压缩质量未验证而放弃」。</li>
+         </ul>
+      </div></div>
+      <div class="row"><div class="k">来源</div><div class="v small">
+         <p>1. Spring AI 官方文档：ChatMemory / Advisor 入口 <a href="https://docs.spring.io/spring-ai/reference/api/chat/">https://docs.spring.io/spring-ai/reference/api/chat/</a></p>
+         <p>2. LangChain4j 文档（ChatMemory / 窗口） <a href="https://docs.langchain4j.dev/">https://docs.langchain4j.dev/</a></p>
+         <p>3. LLMLingua-2 论文（ACL 2024 Findings） <a href="https://aclanthology.org/2024.findings-acl.57.pdf">https://aclanthology.org/2024.findings-acl.57.pdf</a></p>
+         <p>4. DeepSeek 官方定价页（摘要用便宜模型） <a href="https://api-docs.deepseek.com/zh-cn/quick_start/pricing">https://api-docs.deepseek.com/zh-cn/quick_start/pricing</a></p>
+      </div></div>
+    </div>
+  </article>
+
+  <!-- ============ 方案 4 ============ -->
+  <article class="scheme">
+    <div class="scheme-head">
+      <div class="scheme-no">4</div>
+      <div>
+        <h3>固定开头让厂商记住（前缀缓存 + 批处理）</h3>
+        <div class="en">StablePrefixBuilder / PromptLayoutStrategy · 配合 BatchJobScheduler</div>
+      </div>
+      <span class="tag t-new">推荐</span>
+    </div>
+    <div class="scheme-body">
+      <div class="row"><div class="k">一句话原理</div><div class="v"><p>把 prompt 按「固定前缀在前、可变内容在后」组织：系统提示、工具定义、业务规则、输出 Schema 放最前，用户输入、工具返回、时间戳放最后；厂商发现两轮请求共享前缀就按 1 折左右收费。不急的离线任务打包走 Batch API，再打一个 5 折。</p></div></div>
+      <div class="row"><div class="k">省多少</div><div class="v">
+         <p>机制：重复前缀不再重复计费。DeepSeek 全自动磁盘缓存无需写代码，命中 ¥0.02/M vs 未命中 ¥1/M（官方定价页 2026-10-28），命中价是未命中的 1/50。<span class="tag t-pub">公开数据</span></p>
+         <p>量级：Anthropic Sonnet 4.5 基准输入 $3/M、命中 $0.30/M（0.1x），5m 档「缓存一次再读一次就回本」；OpenAI GPT-6 系列共享前缀 30 分钟内复用最高 9 折；OpenAI 与 Anthropic 的 Batch API 全量 token 5 折，且折扣可与缓存叠加。<span class="tag t-pub">公开数据</span> 推断：GoShare 每轮复用 3k 前缀，叠前缀缓存后该部分省约 78%。<span class="tag t-est">推断</span></p>
+      </div></div>
+      <div class="row"><div class="k">Java 怎么落</div><div class="v">
+         <p>库/组件：StablePrefixBuilder 一个类负责拼固定区；Spring AI 已封装 Anthropic cacheOptions 与策略枚举；DeepSeek 侧零代码，只解析响应里的 prompt_cache_hit_tokens 字段做命中率看板。</p>
+         <p>要不要额外服务：不要。批处理可选——一张 batch_task 表 + @Scheduled 扫队攒批，演示时不接真厂商也能跑通状态机。</p>
+         <p>关键设计：把「打缓存点」抽象成自己的 PromptLayoutStrategy 接口，Anthropic 实现才插 cache_control 私有字段，别写死在业务代码里；业务规则文档打缓存点，每用户动态内容放最后。</p>
+      </div></div>
+      <div class="row"><div class="k">可行性</div><div class="v"><p>DeepSeek 完全不用绑厂商（连开关都没有），换厂商不白干；学生充值 ¥10 够演示一下午；可 mock——断言发出去的请求前缀字节级相等即可，不必真打厂商。</p></div></div>
+      <div class="row"><div class="k">怎么测</div><div class="v">
+         <ul>
+           <li>前缀稳定：构造两轮请求，断言可变区之前的字节串逐字相等。</li>
+           <li>缓存点位置：断言 cache_control 只打在 system/工具块，不打在用户消息上。</li>
+           <li>命中率解析：响应 prompt_cache_hit_tokens &gt; 0 时，断言按 0.1x 入账。</li>
+           <li>无时间戳混入：扫描系统提示块，断言不含动态时间戳/随机 ID。</li>
+         </ul>
+      </div></div>
+      <div class="row"><div class="k">坑</div><div class="v">
+         <ul>
+           <li>前缀动一个字缓存全废：触发条件是 Jackson 序列化把字段顺序打乱、或断点块里混入时间戳；后果是永远 miss、一分钱折扣拿不到；防法是做字符串 diff 断言 + 固定序列化顺序。</li>
+           <li>TTL 与流式耗时：触发条件是响应流了 4 分钟、下轮间隔超 5 分钟；后果是缓存过期、从头计费；防法是间隔大就换 1h 档（写入 2x，但读多次后回本）。</li>
+           <li>绑定单厂商：触发条件是把 Anthropic 私有字段写死；后果是换 OpenAI/DeepSeek 后配置无效（不报错但不省钱）；防法是 PromptLayoutStrategy 抽象层。</li>
+           <li>批处理时效性：触发条件是把实时匹配请求塞进批任务；后果是 24h 才交付、用户等到天荒地老；防法是批处理只接夜间离线任务，在线路径绝不过 BatchJobScheduler。</li>
+         </ul>
+      </div></div>
+      <div class="row"><div class="k">来源</div><div class="v small">
+         <p>1. Anthropic 官方文档：Prompt Caching 机制与排障 <a href="https://platform.claude.com/docs/en/build-with-claude/prompt-caching">https://platform.claude.com/docs/en/build-with-claude/prompt-caching</a></p>
+         <p>2. OpenAI 官方公告：GPT-6 更好的 Prompt Caching（30 分钟窗口、最高 9 折） <a href="https://openai.com/index/better-prompt-caching-for-gpt-6/">https://openai.com/index/better-prompt-caching-for-gpt-6/</a></p>
+         <p>3. DeepSeek 官方定价页（命中/未命中单价、高峰时段） <a href="https://api-docs.deepseek.com/zh-cn/quick_start/pricing">https://api-docs.deepseek.com/zh-cn/quick_start/pricing</a></p>
+         <p>4. OpenAI Batch API 官方 FAQ（5 折、24h 交付） <a href="https://help.openai.com/zh-hans-cn/articles/9197833-batch-api-faq">https://help.openai.com/zh-hans-cn/articles/9197833-batch-api-faq</a></p>
+      </div></div>
+    </div>
+  </article>
+
+  <!-- ============ 方案 5 ============ -->
+  <article class="scheme">
+    <div class="scheme-head">
+      <div class="scheme-no">5</div>
+      <div>
+        <h3>所有请求走一个门（网关与配额）</h3>
+        <div class="en">LlmGatewayFilter · 调研过 LiteLLM / New-API，本项目自建</div>
+      </div>
+      <span class="tag t-new">推荐</span>
+    </div>
+    <div class="scheme-body">
+      <div class="row"><div class="k">一句话原理</div><div class="v"><p>在业务应用和各家模型之间架一层统一入口：Spring Cloud Gateway 加一个全局过滤器拦 /llm/**，所有 AI 请求必经它——识别场景、校验配额、按场景选模型档位、记账降级。开源界的 LiteLLM（Python）和 New-API（Go）是同类产品，但个人项目推荐自建：零依赖、好 mock、面试更能讲故事。</p></div></div>
+      <div class="row"><div class="k">省多少</div><div class="v">
+         <p>机制：本身不直接省 token，靠两条间接省——按场景降配（摘要/分类走 flash，撮合解释才走 pro），配额硬上限防代码死循环刷爆账单。</p>
+         <p>量级：配额拦截可把事故型账单直接归零（LiteLLM 虚拟 key 超预算即拒）。<span class="tag t-pub">公开机制</span> 按场景降配，推断可再省 20%–40%。<span class="tag t-est">推断</span></p>
+      </div></div>
+      <div class="row"><div class="k">Java 怎么落</div><div class="v">
+         <p>库/组件：Spring Cloud Gateway 过滤器 + Spring AI ChatClient 统一抽象 + Resilience4j 重试降级；埋点用 Spring AI 自带的 gen_ai.client.token.usage，自定义切面补 scenario / hit_layer / cost_cent。</p>
+         <p>要不要额外服务：不要。自建版零容器；LiteLLM 和 New-API（单容器 SQLite、中文控制台）作为「我调研过成熟开源方案」的对比谈资，不引入。</p>
+         <p>关键设计：每类场景用不同配额桶；重试只在 5xx/超时且最多 1 次（别对上游大请求重试，会翻倍烧 token）；网关独立成 gshare-llm-gateway 小模块，不散在各业务服务里。</p>
+      </div></div>
+      <div class="row"><div class="k">可行性</div><div class="v"><p>外部依赖为零，MockWebServer/WireMock 模拟上游即可；演示时用 Actuator /actuator/prometheus 端点截图展示成本看板。</p></div></div>
+      <div class="row"><div class="k">怎么测</div><div class="v">
+         <ul>
+           <li>配额用完拦住：Mock 额度超限，断言请求不发上游、返回 429 或降级体。</li>
+           <li>简单场景走便宜模型：断言 customer_qa 场景实际调用的是便宜那个 ChatModel。</li>
+           <li>重试一次后兜底：上游第一次 500、第二次 200，断言上游被调 2 次；两次都 500 时走降级模板。</li>
+           <li>记账金额对账：按响应 usage × 单价 = 期望值，误差 &lt; 0.001 元。</li>
+         </ul>
+      </div></div>
+      <div class="row"><div class="k">坑</div><div class="v">
+         <ul>
+           <li>自己写计费容易歪：触发条件是用本地估算当账、流式响应的 usage 没在最后一个 chunk 取；后果是账单对不上、面试被问穿；防法是真实口径一律取响应 usage 字段，jtokkit 只用于发请求前预检。</li>
+           <li>网关成单点：触发条件是演示时网关挂了；后果是全链路挂；防法是本地重启策略 + 演示前 curl 健康检查，并保留业务侧直连降级开关。</li>
+           <li>重试烧钱陷阱：触发条件是对大请求无脑重试；后果是 token 翻倍；防法是最多重试 1 次且只针对 5xx/超时。</li>
+         </ul>
+      </div></div>
+      <div class="row"><div class="k">来源</div><div class="v small">
+         <p>1. LiteLLM Proxy 官方文档 <a href="https://docs.litellm.ai/docs/simple_proxy">https://docs.litellm.ai/docs/simple_proxy</a></p>
+         <p>2. LiteLLM 官方文档：虚拟 key 预算与 fallback <a href="https://docs.litellm.ai/docs/proxy/users">https://docs.litellm.ai/docs/proxy/users</a></p>
+         <p>3. Spring AI 官方文档：ChatClient 与 Advisor <a href="https://docs.spring.io/spring-ai/reference/api/chatclient.html">https://docs.spring.io/spring-ai/reference/api/chatclient.html</a></p>
+         <p>4. Spring AI 官方文档：可观测性（token / 成本指标） <a href="https://docs.spring.io/spring-ai/reference/observability/">https://docs.spring.io/spring-ai/reference/observability/</a></p>
+      </div></div>
+    </div>
+  </article>
+
+  <!-- ============ 方案 6 ============ -->
+  <article class="scheme">
+    <div class="scheme-head">
+      <div class="scheme-no">6</div>
+      <div>
+        <h3>其他四件顺手做的事</h3>
+        <div class="en">ParallelToolAdvisor / ToolResultTrimmer / VersionedAnswerCache / AnswerPrecomputeJob</div>
+      </div>
+      <span class="tag t-new">推荐</span>
+    </div>
+    <div class="scheme-body">
+      <div class="row"><div class="k">一句话原理</div><div class="v"><p>四件不单独成体系、但叠起来很见效的小事：① function calling 合并并行（查订单、查行程、查规则一轮发完）；② 工具结果字段白名单裁剪（数据库查回 40 个字段，只挑 6 个塞给模型）；③ 精确匹配版本化缓存（按模型 + prompt 哈希 + 数据版本精确命中，0 token）；④ 离线预计算 FAQ 答案（定时任务提前生成，线上读库）。</p></div></div>
+      <div class="row"><div class="k">省多少</div><div class="v">
+         <p>机制：Anthropic 官方「缓存 + 保持中间结果不进上下文」改造后，复杂研究任务平均 usage 从 43,588 降到 27,297 tokens，降 37%；学术侧并行化函数调用降约 40% token。<span class="tag t-pub">公开数据</span></p>
+         <p>量级：字段白名单单次工具结果省约 85%；精确命中与预计算读时 token 100% 归零；预计算覆盖 60% 请求时，整体平均 token 直降 60%。<span class="tag t-est">推断</span></p>
+      </div></div>
+      <div class="row"><div class="k">Java 怎么落</div><div class="v">
+         <p>库/组件：ToolResultTrimmer（Jackson 白名单序列化）、ParallelToolAdvisor（Spring AI parallel tool calls）、VersionedAnswerCache（Caffeine + t_llm_answer_cache 表，key = sha256(模型 + 归一化 prompt + 版本号)）、AnswerPrecomputeJob（@Scheduled 凌晨跑）。</p>
+         <p>要不要额外服务：都不要，纯 JVM。</p>
+         <p>关键设计：白名单每个工具配一张金标单测；预计算绑数据版本号事件（政策一改即时重算），不纯靠定时；预计算只覆盖高频标准问题，个性化追问走实时。</p>
+      </div></div>
+      <div class="row"><div class="k">可行性</div><div class="v"><p>全部零外部依赖、可 mock，测试最好写；预计算演示直接对比「实时生成 2s vs 预计算 5ms」，视觉冲击强。</p></div></div>
+      <div class="row"><div class="k">怎么测</div><div class="v">
+         <ul>
+           <li>三个无依赖工具一轮并行：断言模型只发 1 次请求，而非 3 次串行往返。</li>
+           <li>白名单只留声明字段：喂一条 40 字段 JSON，断言输出字段集 == 白名单集合。</li>
+           <li>版本变了缓存作废：规则文档 v1→v2 后，断言同 prompt 重新回源。</li>
+           <li>读路径零调用：读 FAQ 接口时，断言 mock 上游 0 调用。</li>
+         </ul>
+      </div></div>
+      <div class="row"><div class="k">坑</div><div class="v">
+         <ul>
+           <li>白名单漏字段：触发条件是 DTO 少写一个模型需要的列；后果是模型瞎编（幻觉）；防法是每个工具配金标单测对齐，且错误信息/异常栈永不裁剪。</li>
+           <li>预计算数据过期：触发条件是政策改了没触发重算；后果是演示时答旧规则（事故）；防法是版本号事件驱动重算，不只靠 cron。</li>
+           <li>并行工具失效：触发条件是便宜模型不会并行、拆成两轮；后果是省钱失效还多花一轮；防法是演示前固定模型版本，失败时退回串行也不报错。</li>
+         </ul>
+      </div></div>
+      <div class="row"><div class="k">来源</div><div class="v small">
+         <p>1. Anthropic 官方工程博客：高级工具调用降 usage 37% <a href="https://www.anthropic.com/engineering/advanced-tool-use">https://www.anthropic.com/engineering/advanced-tool-use</a></p>
+         <p>2. LLM-Tool Compiler 论文（arXiv 2405.17438） <a href="https://arxiv.org/pdf/2405.17438v1">https://arxiv.org/pdf/2405.17438v1</a></p>
+         <p>3. Spring AI 官方文档：Tool Calling Advisor <a href="https://docs.spring.io/spring-ai/reference/api/tools/tool-calling-advisor.html">https://docs.spring.io/spring-ai/reference/api/tools/tool-calling-advisor.html</a></p>
+         <p>4. LiteLLM 官方文档：本地精确缓存 <a href="https://docs.litellm.ai/docs/caching/local_caching">https://docs.litellm.ai/docs/caching/local_caching</a></p>
+         <p>5. Spring Framework 参考文档：定时任务 <a href="https://docs.spring.io/spring-framework/reference/integration/scheduling.html">https://docs.spring.io/spring-framework/reference/integration/scheduling.html</a></p>
+      </div></div>
+    </div>
+  </article>
+
+</section>
+
+<!-- ============ 03 ============ -->
+<section id="s3">
+  <div class="sec-head">
+    <div class="sec-num">03</div>
+    <h2>一张表选方案<small>省得多少 × 好不好做 × 好不好测</small></h2>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr>
+          <th style="width:200px">方案</th>
+          <th>省 token 的机制</th>
+          <th style="width:170px">量级</th>
+          <th>Java 落地</th>
+          <th style="width:90px">可行性</th>
+          <th style="width:90px">可测试</th>
+        </tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>旧方案（嵌入 + 重排漏斗）<span class="tag t-old">旧方案</span></td>
+          <td>检索相关片段拼 prompt，照样调一次 LLM</td>
+          <td>几乎不省 <span class="tag t-est">推断</span></td>
+          <td>bge 模型 + pgvector + 重排器，吃内存</td>
+          <td class="center">差</td>
+          <td class="center">中</td>
+        </tr>
+        <tr>
+          <td>语义缓存 QuestionCacheService</td>
+          <td>命中直接返历史答案，输入输出 token 全为 0</td>
+          <td>命中 50% 时省 40–50% <span class="tag t-est">推断</span></td>
+          <td>Caffeine + 几分钱的 embedding 接口，无额外服务</td>
+          <td class="center">好</td>
+          <td class="center">好</td>
+        </tr>
+        <tr>
+          <td>模型分级 ModelRouterService</td>
+          <td>简单题走免费小模型，自检不过才升级一次</td>
+          <td>省约 60–70%（RouteLLM 85%+） <span class="tag t-pub">公开数据</span></td>
+          <td>两个 ChatModel Bean + 规则路由</td>
+          <td class="center">好</td>
+          <td class="center">好</td>
+        </tr>
+        <tr>
+          <td>上下文压缩 ConversationSummarizer</td>
+          <td>历史摘要 + 最近 N 轮原文，输入不再随轮次涨</td>
+          <td>输入省 40–50% <span class="tag t-est">推断</span></td>
+          <td>Spring AI Advisor，无外部服务</td>
+          <td class="center">好</td>
+          <td class="center">好</td>
+        </tr>
+        <tr>
+          <td>前缀缓存 + 批处理 StablePrefixBuilder</td>
+          <td>重复前缀按 1 折计费，离线任务再打 5 折</td>
+          <td>命中价 1/50 <span class="tag t-pub">公开数据</span></td>
+          <td>前缀组织纪律，DeepSeek 侧零代码</td>
+          <td class="center">中</td>
+          <td class="center">中</td>
+        </tr>
+        <tr>
+          <td>工具结果白名单 ToolResultTrimmer</td>
+          <td>40 字段只给模型 6 个，裁掉冗余 JSON</td>
+          <td>单次工具结果省约 85% <span class="tag t-est">推断</span></td>
+          <td>Jackson 白名单序列化，无服务</td>
+          <td class="center">好</td>
+          <td class="center">好</td>
+        </tr>
+        <tr>
+          <td>版本化缓存 VersionedAnswerCache</td>
+          <td>精确哈希命中，该次调用 token 100% 归零</td>
+          <td>命中即归零 <span class="tag t-pub">公开机制</span></td>
+          <td>Caffeine + t_llm_answer_cache 表</td>
+          <td class="center">好</td>
+          <td class="center">好</td>
+        </tr>
+        <tr>
+          <td>离线预计算 AnswerPrecomputeJob</td>
+          <td>高频答案提前生成，线上读库 0 token</td>
+          <td>覆盖 60% 时整体直降 60% <span class="tag t-est">推断</span></td>
+          <td>@Scheduled 定时任务，无服务</td>
+          <td class="center">好</td>
+          <td class="center">好</td>
+        </tr>
+        <tr>
+          <td>网关与配额 LlmGatewayFilter</td>
+          <td>按场景降配 + 硬上限防刷，让收益可度量</td>
+          <td>加成 20–40% <span class="tag t-est">推断</span></td>
+          <td>Spring Cloud Gateway 自建，零容器</td>
+          <td class="center">中</td>
+          <td class="center">好</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>打分矩阵</h3>
+  <div class="table-wrap tbl-compact">
+    <table>
+      <thead>
+        <tr><th style="width:200px">方案</th><th class="center">省钱（权重 40%）</th><th class="center">好做（30%）</th><th class="center">好测（20%）</th><th class="center">面试价值（10%）</th><th class="center">合计</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>语义缓存 QuestionCacheService</td>
+          <td class="center">5</td><td class="center">4</td><td class="center">5</td><td class="center">4</td>
+          <td class="center"><span class="val-good">4.6</span></td>
+        </tr>
+        <tr>
+          <td>离线预计算 AnswerPrecomputeJob</td>
+          <td class="center">5</td><td class="center">4</td><td class="center">4</td><td class="center">5</td>
+          <td class="center"><span class="val-good">4.5</span></td>
+        </tr>
+        <tr>
+          <td>模型分级 ModelRouterService</td>
+          <td class="center">4</td><td class="center">4</td><td class="center">5</td><td class="center">5</td>
+          <td class="center"><span class="val-good">4.3</span></td>
+        </tr>
+        <tr>
+          <td>上下文压缩 ConversationSummarizer</td>
+          <td class="center">3</td><td class="center">5</td><td class="center">4</td><td class="center">3</td>
+          <td class="center"><span class="val-mid">3.8</span></td>
+        </tr>
+        <tr>
+          <td>前缀缓存 + 批处理 StablePrefixBuilder</td>
+          <td class="center">4</td><td class="center">4</td><td class="center">3</td><td class="center">4</td>
+          <td class="center"><span class="val-mid">3.8</span></td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+  <p class="small muted">评分标准：省钱看节省比例与稳定性；好做看是否需要额外服务、代码量；好测看能否用单测断言；面试价值看能否讲出有说服力的故事。合计 ≥ 4.0 标绿、3.5–4.0 标黄。</p>
+</section>
+
+<!-- ============ 04 ============ -->
+<section id="s4">
+  <div class="sec-head">
+    <div class="sec-num">04</div>
+    <h2>三套组合架构<small>单点手段有限，叠起来才有量级</small></h2>
+  </div>
+
+  <div class="lead">
+    三套架构不是三选一，而是按顺序叠着做：甲是省钱流水线（先做，把结构定下来），乙是离线预计算（再做，把数字做漂亮），丙是统一网关（收尾，把故事讲圆）。推荐顺序甲 → 乙 → 丙——甲不定下来，乙和丙的收益都没法度量。
+  </div>
+
+  <!-- ============ 甲 ============ -->
+  <article class="arch">
+    <div class="arch-head">
+      <h3>方案 甲：省钱流水线（基线，零外部服务，先做这套）</h3>
+      <p>适合：第一批落地 · 代码量约 3–5 天 · 额外服务：无</p>
+    </div>
+    <div class="arch-body">
+      <div class="arch-block"><h4>数据流</h4>
+        <div class="flow">
+          <div class="flow-step"><b>第 1 步</b><em>问题清洗：去空格、统一全半角，算「问题指纹」</em></div>
+          <div class="arrow">→</div>
+          <div class="flow-step hit"><b>第 2 步</b><em>查版本化缓存，命中直接返回（0 token）</em></div>
+          <div class="arrow">→</div>
+          <div class="flow-step miss"><b>第 3 步</b><em>未命中，免费小模型先答（固定前缀）</em></div>
+          <div class="arrow">→</div>
+          <div class="flow-step miss"><b>第 4 步</b><em>自检：输出必须是约定 JSON、字段齐全</em></div>
+          <div class="arrow">→</div>
+          <div class="flow-step fail"><b>第 5 步</b><em>不过关：升级一次 pro 模型，只升级这一次</em></div>
+          <div class="arrow">→</div>
+          <div class="flow-step"><b>第 6 步</b><em>记账写 t_llm_call_log，按指纹回填缓存</em></div>
+        </div>
+      </div>
+      <div class="arch-block"><h4>命中路径（最省钱的那条）</h4><p>第 1→2 步直接返回。用户看到的是「秒回」，后台成本 0。</p></div>
+      <div class="arch-block"><h4>降级路径（出问题怎么兜）</h4><p>三道兜底：模型超时/报错 → 返回预生成的兜底答案；连续失败 → 熔断，只走缓存 + 转人工；配额到顶 → 降配到免费模型，并在回复里标注「当前为简易回答」。</p></div>
+      <div class="arch-block"><h4>成本估算</h4><p>假设 1000 次/天、每次输入 2000 token、输出 300 token。基线（每次全量调 pro）：2000×3e-6 + 300×6e-6 = ¥0.0078/次 → ¥7.8/天。甲套：40% 命中缓存（0 元）；剩余 600 次里 420 次走 flash：2000×1e-6 + 300×2e-6 = ¥0.0026/次 → ¥1.09；180 次升级 pro → ¥1.40，合计 ¥2.49/天、省 68%。再叠固定前缀命中（按 1200 token 稳定前缀，420 次各省 1200×(1e-6−0.02e-6) = ¥0.0012）再省 ¥0.50 → 约 ¥1.99/天、省约 74%。<span class="tag t-est">推断，非实测</span></p></div>
+      <div class="arch-block"><h4>优点 / 代价</h4><p>优点：不需要任何额外容器、全部可 mock、四层结构一眼能讲清。代价：真要跑起来需要模型 key（可用免费额度兜）。</p></div>
+    </div>
+  </article>
+
+  <!-- ============ 乙 ============ -->
+  <article class="arch">
+    <div class="arch-head">
+      <h3>方案 乙：离线先做好（读的时候不花钱）</h3>
+      <p>适合：常见问题、工单分派规则、退改话术模板、热门路线推荐 · 代码量约 2–3 天 · 额外服务：无</p>
+    </div>
+    <div class="arch-body">
+      <div class="arch-block"><h4>数据流</h4>
+        <div class="flow">
+          <div class="flow-step"><b>第 1 步</b><em>定时收集近 7 天高频问题 + 必答清单 + 热门路线 TOP20</em></div>
+          <div class="arrow">→</div>
+          <div class="flow-step"><b>第 2 步</b><em>批量生成（夜里批量跑，不占用户等待）</em></div>
+          <div class="arrow">→</div>
+          <div class="flow-step"><b>第 3 步</b><em>落库 t_answer_pool，每条带数据版本号</em></div>
+          <div class="arrow">→</div>
+          <div class="flow-step hit"><b>第 4 步</b><em>用户请求查池子，版本一致直接返回（0 token）</em></div>
+          <div class="arrow">→</div>
+          <div class="flow-step fail"><b>第 5 步</b><em>版本对不上或未覆盖 → 现场生成并回填</em></div>
+        </div>
+      </div>
+      <div class="arch-block"><h4>命中路径（最省钱的那条）</h4><p>第 4 步：0 token、毫秒级返回。</p></div>
+      <div class="arch-block"><h4>降级路径（出问题怎么兜）</h4><p>池子没覆盖 → 落到方案甲；池子版本对不上 → 现场生成并回填。</p></div>
+      <div class="arch-block"><h4>成本估算</h4><p>覆盖 60% 请求时，整体再降约 90%（相对基线）。覆盖率是唯一关键变量，实测按「命中池子次数 / 总请求数」统计。<span class="tag t-est">推断</span></p></div>
+      <div class="arch-block"><h4>优点 / 代价</h4><p>优点：省得最狠、演示极稳（不怕网络/模型抽风）。代价：长尾覆盖不到，数据一变要重算。</p></div>
+    </div>
+  </article>
+
+  <!-- ============ 丙 ============ -->
+  <article class="arch">
+    <div class="arch-head">
+      <h3>方案 丙：所有请求走一个门（治理层，让「省了多少」有据可查）</h3>
+      <p>适合：收尾阶段 · 代码量约 2–3 天 · 额外服务：无 · 面试叙事最强的一层</p>
+    </div>
+    <div class="arch-body">
+      <div class="arch-block"><h4>数据流</h4>
+        <div class="flow">
+          <div class="flow-step"><b>第 1 步</b><em>所有 AI 请求过 Spring Cloud Gateway 过滤器</em></div>
+          <div class="arrow">→</div>
+          <div class="flow-step"><b>第 2 步</b><em>按接口打标场景（A1 搜行程 / B1 工单 / A2 挽留）</em></div>
+          <div class="arrow">→</div>
+          <div class="flow-step miss"><b>第 3 步</b><em>配额校验：每场景每日 token 上限、每用户每分钟次数</em></div>
+          <div class="arrow">→</div>
+          <div class="flow-step"><b>第 4 步</b><em>按场景配置表决定最高用哪档模型</em></div>
+          <div class="arrow">→</div>
+          <div class="flow-step"><b>第 5 步</b><em>记账写 t_llm_call_log，Micrometer 暴露命中率</em></div>
+        </div>
+      </div>
+      <div class="arch-block"><h4>命中路径（最省钱的那条）</h4><p>不适用——它是「过路收费站」，不直接省钱，但让甲乙两套的收益可度量、可控、可讲。</p></div>
+      <div class="arch-block"><h4>降级路径（出问题怎么兜）</h4><p>配额超了 → 降一档模型；模型全挂 → 返回兜底答案；网关自己挂了 → 业务侧直连降级（保留开关）。</p></div>
+      <div class="arch-block"><h4>成本估算</h4><p>本身 0 成本（自建、不加容器）；配合「按场景降配」（摘要/分类用 flash，撮合解释用 pro）可再省 20%–40%。<span class="tag t-est">推断</span></p></div>
+      <div class="arch-block"><h4>优点 / 代价</h4><p>优点：零依赖、面试能讲「成本治理」这个完整故事。代价：只加能力不加省钱，做晚了收益小。</p></div>
+    </div>
+  </article>
+
+  <h3>三套横向对比</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th style="width:120px">项目</th><th>甲：省钱流水线</th><th>乙：离线预计算</th><th>丙：统一网关</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>预估节省</td><td>约 74% <span class="tag t-est">推断</span></td><td>约 90%（覆盖 60% 请求时）<span class="tag t-est">推断</span></td><td>加成 20–40% <span class="tag t-est">推断</span></td></tr>
+        <tr><td>额外服务</td><td>无</td><td>无</td><td>无</td></tr>
+        <tr><td>开发量</td><td>3–5 天</td><td>2–3 天</td><td>2–3 天</td></tr>
+        <tr><td>演示效果</td><td>好（四层调用日志）</td><td>极好（秒回、不怕断网）</td><td>一般（看报表）</td></tr>
+        <tr><td>适合阶段</td><td>第一批</td><td>第二批</td><td>收尾</td></tr>
+      </tbody>
+    </table>
+  </div>
+</section>
+
+<!-- ============ 05 ============ -->
+<section id="s5">
+  <div class="sec-head">
+    <div class="sec-num">05</div>
+    <h2>落到三个 AI 功能<small>A1 搜行程、B1 工单、A2 取消挽留</small></h2>
+  </div>
+
+  <div class="lead">
+    三个功能按同一思路配层：结构化输出减少来回、高频内容缓存或预计算、数字一律不让模型算。A1 重点是「口语解析 + 解释缓存」，B1 重点是「分类前缀 + 摘要窗口」，A2 重点是「代码算钱 + 话术池」。
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th style="width:110px">功能</th><th>用户看到的样子</th><th>省钱关键点</th><th style="width:230px">落到哪个类</th></tr>
+      </thead>
+      <tbody>
+        <tr>
+          <td>A1 搜行程 + 智能撮合</td>
+          <td>说一句「明天早上八点从裕华路去正定机场，两个人」，直接出符合条件的行程</td>
+          <td>① 结构化输出一次成型，把「口语→查询条件」一轮搞定，不走多轮追问；② 口语解析结果按指纹缓存，同样的话第二次直接命中；③ 真正搜行程走 MySQL/ES，不让模型生成行程列表；④ 撮合排序用规则打分，模型只解释「为什么推荐这个」。</td>
+          <td>TripQueryParser（解析）+ TripRanker（规则排序）+ TripExplainCache（解释缓存）</td>
+        </tr>
+        <tr>
+          <td>B1 工单分派 + 会话摘要 + 回复草稿</td>
+          <td>用户提交工单，自动归到「支付问题/司机迟到」等类别，附带三行摘要和一段可直接发的回复</td>
+          <td>① 分类规则文字固定成前缀，让厂商缓存记住；② 分类用免费/最便宜模型（这道题不难）；③ 摘要只喂最近 5 条消息 + 工单标题，长对话先揉成 200 字摘要；④ 草稿先查模板库，命中就改写，不从零生成。</td>
+          <td>TicketClassifyService + ChatSummaryService + ReplyDraftService</td>
+        </tr>
+        <tr>
+          <td>A2 取消挽留 + 退改费用解释</td>
+          <td>用户点取消，先看到「退你多少钱、为什么」，再看到一句挽留话术</td>
+          <td>① 金额一律用 Java 代码算（FeeCalculator 纯函数，可单测），模型只把结果说成人话——既省 token 又不会算错；② 挽留话术从预生成池里按场景取，个性化只做一句话微调；③ 费用解释模板固定前缀。</td>
+          <td>FeeCalculator（算钱）+ FeeExplainer（解释）+ RetainScriptPool（话术池）</td>
+        </tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout c-tip">
+    <h4>关键取舍：数字不让模型算</h4>
+    <p>这是省 token 里最「便宜」的一条，也是最防翻车的一条，面试必讲：退多少钱、优惠几元，一律由 FeeCalculator 纯函数算好，模型只负责把算式结果翻译成人话。</p>
+  </div>
+
+  <h3>代码里怎么叫：中文大白话 ↔ 代码名对照</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th style="width:170px">中文大白话</th><th style="width:250px">代码类名 / 表名</th><th>干什么</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>问过的问题直接答</td><td><code class="inline">AnswerCache</code></td><td>按问题指纹查答案，命中就不再调模型</td></tr>
+        <tr><td>问题指纹</td><td><code class="inline">QuestionFingerprint</code></td><td>把一句话洗成固定格式，再算一个哈希</td></tr>
+        <tr><td>数据变了缓存作废</td><td><code class="inline">VersionedAnswerCache</code></td><td>每条答案带版本号，规则/价格一改就失效</td></tr>
+        <tr><td>简单题小模型做</td><td><code class="inline">SmallModelFirst</code></td><td>先叫便宜模型，不过关才叫贵的</td></tr>
+        <tr><td>固定开头让厂商记住</td><td><code class="inline">StablePrefixBuilder</code></td><td>把不变的部分（角色、规则、工具清单）拼在最前面</td></tr>
+        <tr><td>旧对话揉成摘要</td><td><code class="inline">ChatSummaryService</code></td><td>超过 6 轮就把前面的揉成 200 字</td></tr>
+        <tr><td>工具结果只给几列</td><td><code class="inline">ToolResultTrimmer</code></td><td>数据库查回 40 个字段，只挑 6 个塞给模型</td></tr>
+        <tr><td>一口气输出成 JSON</td><td><code class="inline">StructuredAsk</code></td><td>用 schema 约束输出，减少来回追问</td></tr>
+        <tr><td>所有请求走一个门</td><td><code class="inline">LlmGatewayFilter</code></td><td>统一入口、配额、降级</td></tr>
+        <tr><td>离线先把答案做好</td><td><code class="inline">AnswerPrecomputeJob</code></td><td>定时任务批量生成常见答案</td></tr>
+        <tr><td>每次调用记一笔</td><td><code class="inline">t_llm_call_log</code></td><td>记模型、token、耗时、命中哪一层</td></tr>
+        <tr><td>金额用代码算</td><td><code class="inline">FeeCalculator</code></td><td>纯 Java 算钱，模型不算</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>目录与文件放哪</h3>
+  <div class="callout c-tip">
+    <h4>三层目录、一条规矩</h4>
+    <p>正式产物放 <code class="inline">D:\GoShare\docs\</code>（本报告、方案文档；测试报告放 <code class="inline">docs\test-reports\</code>）；临时与测试产物放 <code class="inline">D:\GoShare\_work\</code>（调研笔记、草稿、mock 数据、跑批日志），任务收尾后整个目录删除；项目代码放 <code class="inline">D:\GoShare\goshare-*</code> 各模块。规矩：任何脚本、日志、临时文件都不许落在用户目录或系统临时文件夹里。</p>
+  </div>
+</section>
+
+<!-- ============ 06 ============ -->
+<section id="s6">
+  <div class="sec-head">
+    <div class="sec-num">06</div>
+    <h2>怎么测、怎么证明它真的省了<small>没有数字的"省 token"在面试里等于没说</small></h2>
+  </div>
+
+  <h3>测试用例清单</h3>
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th style="width:90px">层</th><th style="width:240px">用例名（小白能懂）</th><th>断言什么</th><th style="width:150px">工具</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>缓存</td><td>同一句话问两次，第二次不叫模型</td><td>第二次模型调用次数 = 0，返回内容一致</td><td>JUnit5 + Mockito</td></tr>
+        <tr><td>缓存</td><td>意思相反的两句话不能串答案</td><td>「怎么退票」与「怎么补票」不互相命中</td><td>JUnit5</td></tr>
+        <tr><td>缓存</td><td>价格改了，旧答案立刻作废</td><td>版本号 +1 后查询返回 miss</td><td>JUnit5</td></tr>
+        <tr><td>缓存</td><td>缓存满了先扔最久没用的</td><td>超过上限后最旧条目被移除</td><td>JUnit5</td></tr>
+        <tr><td>路由</td><td>简单问题只用小模型</td><td>只调用 1 次 flash，pro 调用次数 = 0</td><td>Mockito 验证调用次数</td></tr>
+        <tr><td>路由</td><td>小模型答歪了会自动升级</td><td>返回结构不合格时触发 1 次升级，且只升级 1 次</td><td>Mockito</td></tr>
+        <tr><td>路由</td><td>大模型挂了要有兜底</td><td>抛异常时返回兜底答案，不抛给用户</td><td>WireMock 返回 500</td></tr>
+        <tr><td>前缀</td><td>同一模板两次请求，前缀必须一模一样</td><td>两次前缀哈希相等（否则厂商缓存全废）</td><td>JUnit5</td></tr>
+        <tr><td>压缩</td><td>聊到第 10 轮，prompt 不能越来越长</td><td>第 10 轮 prompt token &lt; 第 3 轮的 1.5 倍</td><td>jtokkit 计数</td></tr>
+        <tr><td>裁剪</td><td>敏感字段不许进 prompt</td><td>prompt 里不含身份证、手机号</td><td>JUnit5 字符串断言</td></tr>
+        <tr><td>预计算</td><td>任务跑完，池子该有多少条</td><td>条目数 = 预期；版本号正确</td><td>Testcontainers + MySQL</td></tr>
+        <tr><td>预计算</td><td>规则改了要自动重算</td><td>版本号变化触发重算任务</td><td>JUnit5</td></tr>
+        <tr><td>网关</td><td>配额用完要拦住</td><td>返回 429 或降档，不继续烧钱</td><td>MockMvc</td></tr>
+        <tr><td>记账</td><td>记账金额算得对</td><td>按 usage 字段 × 单价 = 期望值（误差 &lt; 0.001 元）</td><td>JUnit5</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <h3>怎么算"省了多少"</h3>
+  <div class="card">
+    <p><strong>公式：</strong></p>
+    <pre>单次成本 = 输入token/1e6 × 输入单价 + 输出token/1e6 × 输出单价
+节省比例 = 1 − (新方案总成本 / 基线总成本)</pre>
+    <p><strong>算例</strong>（按 2026-10-28 官方价、假设 1000 次/天）：基线 ¥7.8/天 → 甲套（叠固定前缀命中）¥1.99/天 → 省 74.5%。<span class="tag t-est">推断</span></p>
+    <p>口径纪律：token 一律取响应里的 <code class="inline">usage</code> 字段，不用本地估算值；jtokkit 只用于发请求前的预检（例如 prompt 超 6k token 就拦截、改走裁剪）。</p>
+  </div>
+
+  <h3>对比实验怎么跑</h3>
+  <div class="card">
+    <ul>
+      <li><strong>样本</strong>：100 道真实问题（A1/B1/A2 各抽 30+，另取 10 道边界），从演示工单/公开测试集取，不自己编。</li>
+      <li><strong>分组</strong>：A 组走基线（每次全量调 pro），B 组走新链路；同一批问题、同一时间窗、顺序随机，避免上下文污染。</li>
+      <li><strong>指标</strong>：总 token、总成本、平均耗时、答案合格率（人工或强模型按 1–5 打分，≥4 算合格）。</li>
+      <li><strong>护栏</strong>：合格率下降 ≤ 2 个百分点；超过就调阈值/缩小缓存范围，否则省的 token 不成立。</li>
+      <li><strong>产出</strong>：一张 4 列对比表 + 一条 SQL 出的成本日报（面试直接放截图）。</li>
+    </ul>
+  </div>
+</section>
+
+<!-- ============ 07 ============ -->
+<section id="s7">
+  <div class="sec-head">
+    <div class="sec-num">07</div>
+    <h2>落地顺序与成本<small>先做哪一步最省事、最见效</small></h2>
+  </div>
+
+  <div class="table-wrap">
+    <table>
+      <thead>
+        <tr><th style="width:80px">步骤</th><th style="width:220px">做什么</th><th style="width:100px">工作量</th><th>做完能省 / 能证明什么</th></tr>
+      </thead>
+      <tbody>
+        <tr><td>1</td><td>埋点先行：t_llm_call_log + 统一调用入口</td><td>0.5 天</td><td>基线成本有了数字，后面所有「省」才有对比</td></tr>
+        <tr><td>2</td><td>固定前缀 + 字段裁剪</td><td>1 天</td><td>单次请求 token 立刻下降（可截图对比）</td></tr>
+        <tr><td>3</td><td>版本化缓存</td><td>1 天</td><td>命中率 30–50%，成本曲线出现台阶</td></tr>
+        <tr><td>4</td><td>小模型先行 + 一次升级</td><td>1 天</td><td>70% 请求走便宜模型</td></tr>
+        <tr><td>5</td><td>离线预计算</td><td>1 天</td><td>60% 请求 0 token，演示秒回</td></tr>
+        <tr><td>6</td><td>网关配额 + 看板</td><td>1 天</td><td>成本治理故事讲圆</td></tr>
+      </tbody>
+    </table>
+  </div>
+
+  <div class="callout c-est">
+    <h4>零成本底线</h4>
+    <p>没有任何 key：全部 mock（WireMock 返回固定 JSON），测试照跑、演示照走。</p>
+    <p>只有免费额度：GLM-4.7-Flash 免费档兜底，pro 只在演示关键路径用。</p>
+    <p>完全离线：本地 Ollama 跑小模型，只验证「路由/缓存/降级」链路是否通。</p>
+  </div>
+</section>
+
+<!-- ============ 08 ============ -->
+<section id="s8">
+  <div class="sec-head">
+    <div class="sec-num">08</div>
+    <h2>来源汇总<small>全部为公开可访问页面，按主题分组，编号连续</small></h2>
+  </div>
+
+  <h3>一、语义缓存与路由</h3>
+  <ul class="src-list">
+    <li>GPTCache GitHub README <span class="url"><a href="https://github.com/zilliztech/GPTCache">https://github.com/zilliztech/GPTCache</a></span></li>
+    <li>GPTCache 官方文档（embedding 实现 / 相似度判定 / LRU-FIFO） <span class="url"><a href="https://gptcache.readthedocs.io/en/stable/">https://gptcache.readthedocs.io/en/stable/</a></span></li>
+    <li>GPTCache ACL 2023 论文（架构 + 2–10x 延迟数据） <span class="url"><a href="https://aclanthology.org/anthology-files/anthology-files/pdf/nlposs/2023.nlposs-1.24.pdf">https://aclanthology.org/anthology-files/anthology-files/pdf/nlposs/2023.nlposs-1.24.pdf</a></span></li>
+    <li>Spring AI 官方文档：Redis 向量库语义缓存 advisor <span class="url"><a href="https://docs.spring.io/spring-ai/reference/2.0/api/vectordbs/redis.html">https://docs.spring.io/spring-ai/reference/2.0/api/vectordbs/redis.html</a></span></li>
+    <li>RouteLLM 论文（arXiv 2406.18665） <span class="url"><a href="https://arxiv.org/abs/2406.18665">https://arxiv.org/abs/2406.18665</a></span></li>
+    <li>LMSYS 官方博客（85%/45%/35% 降本 + 95% GPT-4 表现） <span class="url"><a href="https://www.lmsys.org/blog/2024-07-01-routellm/">https://www.lmsys.org/blog/2024-07-01-routellm/</a></span></li>
+    <li>FrugalGPT 论文（arXiv 2305.05176，最高省 98%） <span class="url"><a href="https://arxiv.org/abs/2305.05176">https://arxiv.org/abs/2305.05176</a></span></li>
+  </ul>
+
+  <h3>二、压缩与厂商缓存</h3>
+  <ul class="src-list">
+    <li>LLMLingua-2 论文（ACL 2024 Findings，压缩比 2x–5x） <span class="url"><a href="https://aclanthology.org/2024.findings-acl.57.pdf">https://aclanthology.org/2024.findings-acl.57.pdf</a></span></li>
+    <li>Spring AI 官方文档：ChatMemory / Advisor 入口 <span class="url"><a href="https://docs.spring.io/spring-ai/reference/api/chat/">https://docs.spring.io/spring-ai/reference/api/chat/</a></span></li>
+    <li>LangChain4j 文档（ChatMemory 窗口） <span class="url"><a href="https://docs.langchain4j.dev/">https://docs.langchain4j.dev/</a></span></li>
+    <li>Anthropic 官方文档：Prompt Caching 机制与排障 <span class="url"><a href="https://platform.claude.com/docs/en/build-with-claude/prompt-caching">https://platform.claude.com/docs/en/build-with-claude/prompt-caching</a></span></li>
+    <li>Anthropic 官方定价页（缓存乘数、批处理可叠加） <span class="url"><a href="https://docs.anthropic.com/en/docs/about-claude/pricing">https://docs.anthropic.com/en/docs/about-claude/pricing</a></span></li>
+    <li>Spring 官方博客：Spring AI Anthropic Prompt Caching 封装 <span class="url"><a href="https://spring.io/blog/2025/10/27/spring-ai-anthropic-prompt-caching-blog/">https://spring.io/blog/2025/10/27/spring-ai-anthropic-prompt-caching-blog/</a></span></li>
+    <li>OpenAI 官方公告：GPT-6 更好的 Prompt Caching（30 分钟窗口、最高 9 折） <span class="url"><a href="https://openai.com/index/better-prompt-caching-for-gpt-6/">https://openai.com/index/better-prompt-caching-for-gpt-6/</a></span></li>
+    <li>OpenAI Batch API 官方 FAQ（5 折、24h 交付） <span class="url"><a href="https://help.openai.com/zh-hans-cn/articles/9197833-batch-api-faq">https://help.openai.com/zh-hans-cn/articles/9197833-batch-api-faq</a></span></li>
+  </ul>
+
+  <h3>三、网关与度量</h3>
+  <ul class="src-list">
+    <li>LiteLLM Proxy 官方文档 <span class="url"><a href="https://docs.litellm.ai/docs/simple_proxy">https://docs.litellm.ai/docs/simple_proxy</a></span></li>
+    <li>LiteLLM 官方文档：虚拟 key 预算与 fallback <span class="url"><a href="https://docs.litellm.ai/docs/proxy/users">https://docs.litellm.ai/docs/proxy/users</a></span></li>
+    <li>LiteLLM 官方文档：缓存机制 <span class="url"><a href="https://docs.litellm.ai/docs/proxy/caching">https://docs.litellm.ai/docs/proxy/caching</a></span></li>
+    <li>New-API GitHub 仓库（国产网关，对比谈资） <span class="url"><a href="https://github.com/QuantumNous/new-api">https://github.com/QuantumNous/new-api</a></span></li>
+    <li>Spring AI 官方文档：ChatClient 与 Advisor <span class="url"><a href="https://docs.spring.io/spring-ai/reference/api/chatclient.html">https://docs.spring.io/spring-ai/reference/api/chatclient.html</a></span></li>
+    <li>Spring AI 官方文档：可观测性（token / 成本指标） <span class="url"><a href="https://docs.spring.io/spring-ai/reference/observability/">https://docs.spring.io/spring-ai/reference/observability/</a></span></li>
+    <li>jtokkit GitHub（OpenAI tiktoken 的 Java 移植） <span class="url"><a href="https://github.com/knuddelsgmbh/jtokkit">https://github.com/knuddelsgmbh/jtokkit</a></span></li>
+  </ul>
+
+  <h3>四、其他手段（工具调用 / 裁剪 / 预计算 / 评估）</h3>
+  <ul class="src-list">
+    <li>Anthropic 官方工程博客：高级工具调用降 usage 37% <span class="url"><a href="https://www.anthropic.com/engineering/advanced-tool-use">https://www.anthropic.com/engineering/advanced-tool-use</a></span></li>
+    <li>LLM-Tool Compiler 论文（arXiv 2405.17438） <span class="url"><a href="https://arxiv.org/pdf/2405.17438v1">https://arxiv.org/pdf/2405.17438v1</a></span></li>
+    <li>Spring AI 官方文档：Tool Calling Advisor <span class="url"><a href="https://docs.spring.io/spring-ai/reference/api/tools/tool-calling-advisor.html">https://docs.spring.io/spring-ai/reference/api/tools/tool-calling-advisor.html</a></span></li>
+    <li>LiteLLM 官方文档：本地精确缓存 <span class="url"><a href="https://docs.litellm.ai/docs/caching/local_caching">https://docs.litellm.ai/docs/caching/local_caching</a></span></li>
+    <li>Spring Framework 参考文档：定时任务 <span class="url"><a href="https://docs.spring.io/spring-framework/reference/integration/scheduling.html">https://docs.spring.io/spring-framework/reference/integration/scheduling.html</a></span></li>
+    <li>Spring AI 官方文档：测试与 Evaluator <span class="url"><a href="https://docs.spring.io/spring-ai/reference/api/testing.html">https://docs.spring.io/spring-ai/reference/api/testing.html</a></span></li>
+    <li>DeepSeek 官方定价页（命中/未命中单价、高峰时段） <span class="url"><a href="https://api-docs.deepseek.com/zh-cn/quick_start/pricing">https://api-docs.deepseek.com/zh-cn/quick_start/pricing</a></span></li>
+  </ul>
+</section>
+
+</main>
+
+<footer>
+  <div class="inner">
+    <p>GoShare 省 Token 架构调研报告 · v2.0 · 2026-10-28</p>
+    <p class="small">本报告为个人项目的技术调研，数字以标注为准；标为「推断」的部分需在项目实测后替换。旧版「规则 → 分类 → LLM 三层漏斗」方案不再采用。</p>
+  </div>
+</footer>
+
+</body>
+</html>

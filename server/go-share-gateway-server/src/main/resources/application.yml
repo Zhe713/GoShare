@@ -1,0 +1,19 @@
+server:
+  port: 8000
+
+spring:
+  application:
+    name: go-share-gateway-server
+  cloud:
+    gateway:
+      routes:
+        - id: user
+          uri: http://localhost:8001
+          predicates:
+            - Path=/api/user/**
+
+management:
+  endpoints:
+    web:
+      exposure:
+        include: health,info
