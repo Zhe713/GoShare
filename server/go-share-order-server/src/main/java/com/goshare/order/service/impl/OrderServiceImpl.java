@@ -33,6 +33,7 @@ import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
 import java.util.Map;
+import java.util.Set;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -46,6 +47,9 @@ public class OrderServiceImpl implements OrderService {
 
     /** Redis 座位库存键前缀 */
     private static final String SEAT_KEY_PREFIX = "trip:seats:";
+
+    /** Redis 候补队列键前缀：waitlist:{行程ID}（有序集合，按登记时间排队） */
+    private static final String WAITLIST_KEY_PREFIX = "waitlist:";
 
     /** 幂等业务类型 */
     private static final String BIZ_CREATE_ORDER = "CREATE_ORDER";
@@ -191,6 +195,8 @@ public class OrderServiceImpl implements OrderService {
         if (order.getCouponId() != null) {
             callCouponReturn(order.getCouponId(), order.getPassengerId(), orderNo);
         }
+        // 座位释放后，候补队列第一位自动补位（释放几个补几个）
+        promoteWaitlist(order.getTripId(), order.getSeatCount());
         return toVO(order);
     }
 
@@ -267,12 +273,64 @@ public class OrderServiceImpl implements OrderService {
                 if (order.getCouponId() != null) {
                     callCouponReturn(order.getCouponId(), order.getPassengerId(), order.getOrderNo());
                 }
+                // 座位释放后，候补队列第一位自动补位（释放几个补几个）
+                promoteWaitlist(order.getTripId(), order.getSeatCount());
                 log.info("超时订单自动关闭 orderNo={}", order.getOrderNo());
             } catch (Exception e) {
                 log.error("关闭超时订单失败 orderNo={}", order.getOrderNo(), e);
             }
         }
         return expiredList.size();
+    }
+
+    // ---------- 候补递补 ----------
+
+    @Override
+    public void joinWaitlist(Long passengerId, Long tripId) {
+        // 1. 行程必须存在
+        TripDTO trip = fetchTrip(tripId);
+        if (trip == null) {
+            throw new BusinessException(404, "行程不存在");
+        }
+        // 2. 还有余座时直接提示去下单，不用候补
+        if (trip.getRemainSeats() != null && trip.getRemainSeats() > 0) {
+            throw new BusinessException(400, "行程还有余座，可直接下单");
+        }
+        // 3. Redis 有序集合排队（分数=登记时间，先到先得；重复登记幂等覆盖）
+        redisTemplate.opsForZSet().add(WAITLIST_KEY_PREFIX + tripId,
+                String.valueOf(passengerId), System.currentTimeMillis());
+        log.info("候补登记成功 passengerId={} tripId={}", passengerId, tripId);
+    }
+
+    @Override
+    public void leaveWaitlist(Long passengerId, Long tripId) {
+        redisTemplate.opsForZSet().remove(WAITLIST_KEY_PREFIX + tripId, String.valueOf(passengerId));
+        log.info("退出候补 passengerId={} tripId={}", passengerId, tripId);
+    }
+
+    /** 座位释放后递补：按登记顺序为候补乘客自动下单，释放几个补几个 */
+    private void promoteWaitlist(Long tripId, int releasedCount) {
+        for (int i = 0; i < releasedCount; i++) {
+            Set<String> first = redisTemplate.opsForZSet().range(WAITLIST_KEY_PREFIX + tripId, 0, 0);
+            if (first == null || first.isEmpty()) {
+                return; // 队列空了
+            }
+            Long waitUserId = Long.valueOf(first.iterator().next());
+            try {
+                OrderCreateRequest req = new OrderCreateRequest();
+                req.setTripId(tripId);
+                req.setSeatCount(1);
+                // 固定幂等键：同一行程同一乘客只会被递补一次
+                req.setIdempotentKey("WAITLIST:" + tripId + ":" + waitUserId);
+                OrderVO vo = create(waitUserId, req);
+                redisTemplate.opsForZSet().remove(WAITLIST_KEY_PREFIX + tripId, String.valueOf(waitUserId));
+                log.info("候补递补成功 tripId={} waitUserId={} orderNo={}", tripId, waitUserId, vo.getOrderNo());
+            } catch (Exception e) {
+                // 座位可能刚被他人抢走或下单失败：停止本轮递补，保留排队
+                log.warn("候补递补失败 tripId={} waitUserId={}：{}", tripId, waitUserId, e.getMessage());
+                return;
+            }
+        }
     }
 
     // ---------- 私有方法 ----------

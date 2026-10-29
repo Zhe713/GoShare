@@ -6,6 +6,7 @@ import com.goshare.order.dto.OrderCancelRequest;
 import com.goshare.order.dto.OrderCreateRequest;
 import com.goshare.order.dto.OrderVO;
 import com.goshare.order.dto.PayCallbackRequest;
+import com.goshare.order.dto.WaitlistRequest;
 import com.goshare.order.service.OrderService;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
@@ -63,5 +64,23 @@ public class OrderController {
     public Result<List<OrderVO>> mine(@RequestHeader(value = "Authorization", required = false) String auth) {
         Long passengerId = currentUserResolver.resolveUserId(auth);
         return Result.success(orderService.listByPassenger(passengerId));
+    }
+
+    /** 候补登记：行程满座时排队等座位 */
+    @PostMapping("/waitlist")
+    public Result<Void> joinWaitlist(@RequestHeader(value = "Authorization", required = false) String auth,
+                                     @RequestBody @Valid WaitlistRequest request) {
+        Long passengerId = currentUserResolver.resolveUserId(auth);
+        orderService.joinWaitlist(passengerId, request.getTripId());
+        return Result.success(null);
+    }
+
+    /** 退出候补 */
+    @PostMapping("/waitlist/leave")
+    public Result<Void> leaveWaitlist(@RequestHeader(value = "Authorization", required = false) String auth,
+                                      @RequestBody @Valid WaitlistRequest request) {
+        Long passengerId = currentUserResolver.resolveUserId(auth);
+        orderService.leaveWaitlist(passengerId, request.getTripId());
+        return Result.success(null);
     }
 }

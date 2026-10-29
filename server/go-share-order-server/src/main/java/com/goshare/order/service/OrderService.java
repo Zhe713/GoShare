@@ -27,4 +27,10 @@ public interface OrderService {
 
     /** 定时释放超时未支付订单并回补库存，返回处理条数 */
     int releaseExpiredOrders();
+
+    /** 候补登记：行程满座时排队（Redis 有序集合，按登记时间排序） */
+    void joinWaitlist(Long passengerId, Long tripId);
+
+    /** 退出候补 */
+    void leaveWaitlist(Long passengerId, Long tripId);
 }

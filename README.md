@@ -73,6 +73,13 @@ mvn -pl go-share-user-server spring-boot:run
 - 券变动全量流水（coupon_log：RECEIVE / LOCK / USE / RETURN），便于审计
 - 联调验证 9 项全部通过：3 种券结算金额正确（满 50 减 10 / 8.5 折抵 9 元 / 立减）、重复领取被拦、秒杀限量 2 第 3 人抢光、重复领/DB 已满时 Redis 库存回补、支付后券确认已用、取消后券退回、已用券再下单被拦（"券不可用"）
 
+### 阶段 3：微服务治理 + 搜索 + 候补 ✅（网关统一入口 / 搜索可用 / 候补自动补位 全部联调通过）
+- **Nacos 注册中心**：8 个服务全部注册（gateway/user/trip/order/marketing/payment/notify/assistant），服务间调用改服务名 lb:// 负载均衡（带券下单、支付回调跨服务链路验证通过）
+- **Gateway 统一入口（8000）**：7 条路由全部指向服务名，全局 JWT 鉴权（白名单外必须携带 Bearer token，透传 X-User-Id）、Redis 令牌桶限流（单 IP 20 qps / 突发 40）、统一 401/限流返回格式
+- **ES 行程搜索**：行程发布同步到 Elasticsearch（goshare_trip 索引，出发时间秒级格式），搜索 ES 优先 + 数据库实时余座校准，ES 不可用自动降级 MySQL；提供全量同步运维接口
+- **候补递补**：行程满座后乘客可排队候补（Redis 有序集合按登记时间排序，重复登记幂等）；订单取消 / 超时释放座位后，候补第一位自动生成订单补位（固定幂等键防重复递补）
+- 阶段 3 联调验证：Nacos 服务数 8、网关登录 / 伪造 token 401、限流拦截、ES 搜索（石家庄→北京命中、反向为空、日期过滤）、候补递补（满座登记 → 取消释放 → 自动补位 → 队列清空）
+
 ## 阶段 1 接口速查
 
 | 服务 | 接口 | 说明 |
@@ -109,6 +116,15 @@ mvn -pl go-share-user-server spring-boot:run
 | order | POST /api/order/create | 下单（body 可带 couponId，锁定券并结算抵扣） |
 
 注：coupon_id 字段通过 `sql/02-coupon-schema.sql` 末尾动态 ALTER 添加（MySQL 8 兼容写法）。
+
+## 阶段 3 接口速查
+
+| 服务 | 接口 | 说明 |
+|---|---|---|
+| gateway | 所有 /api/** | 统一入口 8000：JWT 鉴权 + 限流后转发到各服务 |
+| trip | POST /api/trip/es-sync | ES 全量同步行程（运维接口） |
+| order | POST /api/order/waitlist | 候补登记（行程满座时排队，body: tripId） |
+| order | POST /api/order/waitlist/leave | 退出候补（body: tripId） |
 
 ## Git 提交规范（中文）
 
