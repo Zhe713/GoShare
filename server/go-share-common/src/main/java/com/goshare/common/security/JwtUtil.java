@@ -1,4 +1,4 @@
-package com.goshare.user.util;
+package com.goshare.common.security;
 
 import io.jsonwebtoken.Claims;
 import io.jsonwebtoken.Jwts;
@@ -12,7 +12,7 @@ import java.nio.charset.StandardCharsets;
 import java.util.Date;
 
 /**
- * JWT 工具：签发与解析登录令牌
+ * JWT 工具：签发与解析登录令牌（各服务共用）
  */
 @Component
 public class JwtUtil {

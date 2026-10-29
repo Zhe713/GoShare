@@ -8,7 +8,7 @@ import com.goshare.user.dto.RegisterRequest;
 import com.goshare.user.entity.User;
 import com.goshare.user.mapper.UserMapper;
 import com.goshare.user.service.UserService;
-import com.goshare.user.util.JwtUtil;
+import com.goshare.common.security.JwtUtil;
 import lombok.RequiredArgsConstructor;
 import org.springframework.security.crypto.bcrypt.BCryptPasswordEncoder;
 import org.springframework.stereotype.Service;

@@ -5,7 +5,7 @@ import com.goshare.user.dto.CertificationAuditRequest;
 import com.goshare.user.dto.DriverCertificationRequest;
 import com.goshare.user.dto.DriverCertificationVO;
 import com.goshare.user.service.DriverCertificationService;
-import com.goshare.user.util.CurrentUserResolver;
+import com.goshare.common.security.CurrentUserResolver;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.web.bind.annotation.GetMapping;

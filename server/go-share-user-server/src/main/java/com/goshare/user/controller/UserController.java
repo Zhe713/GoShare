@@ -8,7 +8,7 @@ import com.goshare.user.dto.RegisterRequest;
 import com.goshare.user.dto.UserVO;
 import com.goshare.user.entity.User;
 import com.goshare.user.service.UserService;
-import com.goshare.user.util.CurrentUserResolver;
+import com.goshare.common.security.CurrentUserResolver;
 import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
