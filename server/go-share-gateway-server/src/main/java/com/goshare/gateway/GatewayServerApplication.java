@@ -6,7 +6,7 @@ import org.springframework.boot.autoconfigure.SpringBootApplication;
 /**
  * 网关服务启动类
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = "com.goshare")
 public class GatewayServerApplication {
 
     public static void main(String[] args) {

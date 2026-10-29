@@ -9,11 +9,56 @@ spring:
       discovery:
         server-addr: localhost:8848
     gateway:
+      # 跨域（H5 本地开发用）
+      globalcors:
+        cors-configurations:
+          '[/**]':
+            allowedOriginPatterns: "*"
+            allowedMethods: "*"
+            allowedHeaders: "*"
+            allow-credentials: true
       routes:
         - id: user
-          uri: http://localhost:8001
+          uri: lb://go-share-user-server
           predicates:
-            - Path=/api/user/**
+            - Path=/api/user/**,/api/driver/**
+        - id: trip
+          uri: lb://go-share-trip-server
+          predicates:
+            - Path=/api/trip/**
+        - id: order
+          uri: lb://go-share-order-server
+          predicates:
+            - Path=/api/order/**
+          # 网关令牌桶限流（Redis 实现）：每秒补 20 个令牌、突发上限 40
+          filters:
+            - name: RequestRateLimiter
+              args:
+                redis-rate-limiter.replenishRate: 20
+                redis-rate-limiter.burstCapacity: 40
+                redis-rate-limiter.requestedTokens: 1
+        - id: marketing
+          uri: lb://go-share-marketing-server
+          predicates:
+            - Path=/api/coupon/**
+        - id: payment
+          uri: lb://go-share-payment-server
+          predicates:
+            - Path=/api/payment/**
+        - id: notify
+          uri: lb://go-share-notify-server
+          predicates:
+            - Path=/api/notify/**
+        - id: assistant
+          uri: lb://go-share-assistant-server
+          predicates:
+            - Path=/api/assistant/**
+
+# 项目自定义配置（与各服务一致的 JWT 密钥，网关统一校验登录）
+goshare:
+  jwt:
+    secret: go-share-demo-jwt-secret-please-change-in-prod-0123456789
+    expire-hours: 24
 
 management:
   endpoints:
