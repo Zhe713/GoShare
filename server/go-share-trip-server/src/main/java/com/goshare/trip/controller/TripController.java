@@ -63,4 +63,10 @@ public class TripController {
         Long driverId = currentUserResolver.resolveUserId(auth);
         return Result.success(tripService.listByDriver(driverId));
     }
+
+    /** 全量同步行程到 ES 搜索引擎（运维接口） */
+    @PostMapping("/es-sync")
+    public Result<Integer> esSync() {
+        return Result.success(tripService.syncAllToEs());
+    }
 }

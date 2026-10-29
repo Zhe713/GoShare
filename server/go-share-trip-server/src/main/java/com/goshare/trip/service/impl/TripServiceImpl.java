@@ -5,9 +5,12 @@ import com.goshare.common.exception.BusinessException;
 import com.goshare.trip.dto.TripPublishRequest;
 import com.goshare.trip.dto.TripVO;
 import com.goshare.trip.entity.Trip;
+import com.goshare.trip.es.TripDocument;
+import com.goshare.trip.es.TripEsService;
 import com.goshare.trip.mapper.TripMapper;
 import com.goshare.trip.service.TripService;
 import lombok.RequiredArgsConstructor;
+import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.BeanUtils;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.stereotype.Service;
@@ -15,11 +18,14 @@ import org.springframework.stereotype.Service;
 import java.time.LocalDate;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
+import java.util.function.Function;
 import java.util.stream.Collectors;
 
 /**
  * 行程服务实现
  */
+@Slf4j
 @Service
 @RequiredArgsConstructor
 public class TripServiceImpl implements TripService {
@@ -29,6 +35,7 @@ public class TripServiceImpl implements TripService {
 
     private final TripMapper tripMapper;
     private final StringRedisTemplate redisTemplate;
+    private final TripEsService tripEsService;
 
     @Override
     public TripVO publish(Long driverId, TripPublishRequest request) {
@@ -50,15 +57,47 @@ public class TripServiceImpl implements TripService {
         tripMapper.insert(trip);
         // 3. 初始化 Redis 座位库存（下单时用 Lua 原子扣减）
         redisTemplate.opsForValue().set(SEAT_KEY_PREFIX + trip.getId(), String.valueOf(request.getTotalSeats()));
+        // 4. 同步到 ES 搜索引擎（失败不影响发布）
+        tripEsService.index(trip);
         return toVO(trip);
     }
 
     @Override
     public List<TripVO> search(String fromCity, String toCity, LocalDate departDate) {
+        try {
+            // 1. 优先走 ES 检索
+            List<TripDocument> docs = tripEsService.search(fromCity, toCity, departDate);
+            if (docs.isEmpty()) {
+                return List.of();
+            }
+            // 2. 用数据库校准余座等实时字段（ES 侧重检索，DB 保实时）
+            List<Long> ids = docs.stream().map(TripDocument::getId).collect(Collectors.toList());
+            Map<Long, Trip> dbMap = tripMapper.selectBatchIds(ids).stream()
+                    .collect(Collectors.toMap(Trip::getId, Function.identity()));
+            return docs.stream()
+                    .map(doc -> {
+                        Trip trip = dbMap.get(doc.getId());
+                        return trip != null ? toVO(trip) : toVOFromDoc(doc);
+                    })
+                    .collect(Collectors.toList());
+        } catch (Exception e) {
+            // 2. ES 不可用时降级 MySQL 搜索（演示优雅降级）
+            log.warn("ES 搜索不可用，降级 MySQL: {}", e.getMessage());
+            return searchFromDb(fromCity, toCity, departDate);
+        }
+    }
+
+    /** 全量同步行程数据到 ES（运维接口：数据初始化/修复时用） */
+    public int syncAllToEs() {
+        List<Trip> all = tripMapper.selectList(null);
+        all.forEach(tripEsService::index);
+        return all.size();
+    }
+
+    private List<TripVO> searchFromDb(String fromCity, String toCity, LocalDate departDate) {
         LambdaQueryWrapper<Trip> wrapper = new LambdaQueryWrapper<Trip>()
                 .eq(Trip::getFromCity, fromCity)
                 .eq(Trip::getToCity, toCity)
-                // 只展示可预订行程：待出发或进行中
                 .in(Trip::getStatus, 0, 1)
                 .orderByAsc(Trip::getDepartureTime);
         if (departDate != null) {
@@ -96,6 +135,13 @@ public class TripServiceImpl implements TripService {
     private TripVO toVO(Trip trip) {
         TripVO vo = new TripVO();
         BeanUtils.copyProperties(trip, vo);
+        return vo;
+    }
+
+    /** ES 文档转 VO（数据库查不到时兜底，保证搜索有结果） */
+    private TripVO toVOFromDoc(TripDocument doc) {
+        TripVO vo = new TripVO();
+        BeanUtils.copyProperties(doc, vo);
         return vo;
     }
 }

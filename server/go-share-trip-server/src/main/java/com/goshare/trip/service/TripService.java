@@ -26,4 +26,7 @@ public interface TripService {
 
     /** 按 ID 查询实体（供内部使用） */
     Trip getById(Long tripId);
+
+    /** 全量同步行程数据到 ES 搜索引擎（运维/初始化用） */
+    int syncAllToEs();
 }

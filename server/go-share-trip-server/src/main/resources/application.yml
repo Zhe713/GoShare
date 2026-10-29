@@ -17,6 +17,10 @@ spring:
     redis:
       host: localhost
       port: 6379
+  elasticsearch:
+    uris: http://localhost:9200
+    connection-timeout: 10s
+    socket-timeout: 10s
 
 mybatis-plus:
   configuration:
