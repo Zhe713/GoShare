@@ -38,22 +38,20 @@ services:
       retries: 10
 
   rocketmq-namesrv:
-    image: apache/rocketmq:5.3.1
+    image: apache/rocketmq:4.9.7
     container_name: goshare-rocketmq-namesrv
     command: sh mqnamesrv
     ports:
       - "9876:9876"
     environment:
       TZ: Asia/Shanghai
-    volumes:
-      - rmq-namesrv:/home/rocketmq/logs
 
   rocketmq-broker:
-    image: apache/rocketmq:5.3.1
+    image: apache/rocketmq:4.9.7
     container_name: goshare-rocketmq-broker
     depends_on:
       - rocketmq-namesrv
-    command: sh mqbroker -n goshare-rocketmq-namesrv:9876
+    command: sh mqbroker -n goshare-rocketmq-namesrv:9876 -c /home/rocketmq/conf/broker.conf
     ports:
       - "10909:10909"
       - "10911:10911"
@@ -61,8 +59,7 @@ services:
     environment:
       TZ: Asia/Shanghai
     volumes:
-      - rmq-broker:/home/rocketmq/logs
-      - rmq-broker-store:/home/rocketmq/store
+      - ./rocketmq/broker.conf:/home/rocketmq/conf/broker.conf:ro
 
   rocketmq-dashboard:
     image: apacherocketmq/rocketmq-dashboard:1.0.0
@@ -91,18 +88,19 @@ services:
         soft: -1
         hard: -1
 
-  minio:
-    image: minio/minio:RELEASE.2024-06-13T22-53-53Z
-    container_name: goshare-minio
-    command: server /data --console-address ":9001"
-    environment:
-      MINIO_ROOT_USER: goshare
-      MINIO_ROOT_PASSWORD: goshare123
-    ports:
-      - "9000:9000"
-      - "9001:9001"
-    volumes:
-      - minio-data:/data
+  # minio 暂缓：当前镜像加速源对 minio 仓库返回 denied（阶段 3 需要对象存储前换源启用）
+  # minio:
+  #   image: minio/minio:latest
+  #   container_name: goshare-minio
+  #   command: server /data --console-address ":9001"
+  #   environment:
+  #     MINIO_ROOT_USER: goshare
+  #     MINIO_ROOT_PASSWORD: goshare123
+  #   ports:
+  #     - "9000:9000"
+  #     - "9001:9001"
+  #   volumes:
+  #     - minio-data:/data
 
   nacos:
     image: nacos/nacos-server:v2.3.2
@@ -119,8 +117,8 @@ services:
 volumes:
   mysql-data:
   redis-data:
-  rmq-namesrv:
-  rmq-broker:
-  rmq-broker-store:
   es-data:
-  minio-data:
+  # minio-data:  # minio 暂缓时保留卷定义注释
+  # rmq-namesrv:  # RocketMQ 暂不挂卷（镜像内部路径权限稳定）
+  # rmq-broker:
+  # rmq-broker-store:
