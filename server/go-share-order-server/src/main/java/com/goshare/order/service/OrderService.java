@@ -28,6 +28,9 @@ public interface OrderService {
     /** 定时释放超时未支付订单并回补库存，返回处理条数 */
     int releaseExpiredOrders();
 
+    /** 按订单号关闭超时订单（RocketMQ 延时消息消费者调用；非 CREATED 状态静默跳过） */
+    void closeExpiredOrderByNo(String orderNo);
+
     /** 候补登记：行程满座时排队（Redis 有序集合，按登记时间排序） */
     void joinWaitlist(Long passengerId, Long tripId);
 

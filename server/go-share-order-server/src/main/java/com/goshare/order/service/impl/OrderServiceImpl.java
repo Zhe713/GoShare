@@ -17,6 +17,7 @@ import com.goshare.order.mapper.TripSeatMapper;
 import com.goshare.order.service.OrderService;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
+import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.dao.DuplicateKeyException;
@@ -26,6 +27,7 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
+import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
@@ -77,12 +79,16 @@ public class OrderServiceImpl implements OrderService {
     private final StringRedisTemplate redisTemplate;
     private final RestTemplate restTemplate;
     private final ObjectMapper objectMapper;
+    private final RocketMQTemplate rocketMQTemplate;
 
     @Value("${goshare.order.trip-service-url}")
     private String tripServiceUrl;
 
     @Value("${goshare.order.timeout-minutes}")
     private long timeoutMinutes;
+
+    @Value("${goshare.order.scheduled-timeout-minutes}")
+    private long scheduledTimeoutMinutes;
 
     @Value("${goshare.order.marketing-service-url}")
     private String marketingServiceUrl;
@@ -148,7 +154,10 @@ public class OrderServiceImpl implements OrderService {
             order.setStatus("CREATED");
             orderMapper.insert(order);
 
-            // 7. 写幂等记录（唯一索引防并发；冲突说明首次请求已成功）
+            // 7. 发送 RocketMQ 延时消息：待支付订单到期自动关闭（延时 10 分钟，与超时配置一致）
+            sendTimeoutDelayMessage(orderNo);
+
+            // 8. 写幂等记录（唯一索引防并发；冲突说明首次请求已成功）
             saveIdempotency(idemKey, BIZ_CREATE_ORDER, order);
             return toVO(order);
         } catch (DuplicateKeyException e) {
@@ -260,32 +269,66 @@ public class OrderServiceImpl implements OrderService {
                 .stream().map(this::toVO).collect(Collectors.toList());
     }
 
-    /** 每分钟扫描一次，关闭超时未支付的订单并回补库存 */
+    /** 发送 RocketMQ 延时消息：待支付订单到期自动关闭（10 分钟后触发） */
+    private void sendTimeoutDelayMessage(String orderNo) {
+        try {
+            // delayLevel=14 对应 RocketMQ 4.9 延时档位 10 分钟（与 goshare.order.timeout-minutes 对齐）
+            rocketMQTemplate.syncSend("GO_SHARE_ORDER",
+                    MessageBuilder.withPayload(orderNo).build(), 3_000, 14);
+            log.info("已发送订单超时延时消息 orderNo={}", orderNo);
+        } catch (Exception e) {
+            // 发送失败不阻塞下单：定时扫描（releaseExpiredOrders）兜底关闭
+            log.warn("发送超时延时消息失败，交由定时扫描兜底 orderNo={}", orderNo, e);
+        }
+    }
+
+    /** 按订单号关闭超时订单（供 RocketMQ 消费者调用；状态非 CREATED 时静默跳过） */
+    @Override
+    public void closeExpiredOrderByNo(String orderNo) {
+        TripOrder order = orderMapper.selectOne(new LambdaQueryWrapper<TripOrder>()
+                .eq(TripOrder::getOrderNo, orderNo));
+        if (order == null) {
+            log.warn("超时关闭跳过：订单不存在 orderNo={}", orderNo);
+            return;
+        }
+        closeExpiredOrder(order);
+    }
+
+    /** 关闭单个超时订单：状态置 EXPIRED + 回补库存 + 退券 + 候补递补（定时扫描与 MQ 消费共用） */
+    private void closeExpiredOrder(TripOrder order) {
+        // 已支付/已取消/已关闭的订单无需重复处理（消费防重复的兜底）
+        if (!"CREATED".equals(order.getStatus())) {
+            return;
+        }
+        order.setStatus("EXPIRED");
+        order.setCancelReason("超时未支付自动关闭");
+        // 分片表更新必须带分片键（passenger_id），否则无法路由
+        orderMapper.update(order, new LambdaUpdateWrapper<TripOrder>()
+                .eq(TripOrder::getId, order.getId())
+                .eq(TripOrder::getPassengerId, order.getPassengerId()));
+        // 回补库存（行程表 DB + Redis，双写一致）
+        tripSeatMapper.restoreSeat(order.getTripId(), order.getSeatCount());
+        restoreSeat(order.getTripId(), order.getSeatCount());
+        // 若订单用了券，退回给乘客（尽力而为）
+        if (order.getCouponId() != null) {
+            callCouponReturn(order.getCouponId(), order.getPassengerId(), order.getOrderNo());
+        }
+        // 座位释放后，候补队列第一位自动补位（释放几个补几个）
+        promoteWaitlist(order.getTripId(), order.getSeatCount());
+        log.info("超时订单自动关闭 orderNo={}", order.getOrderNo());
+    }
+
+    /** 每分钟扫描一次（兜底）：关闭超时未支付的订单并回补库存（RocketMQ 延时消息为主路径，兜底晚 2 分钟） */
     @Override
     @Scheduled(fixedDelay = 60_000)
     public int releaseExpiredOrders() {
-        LocalDateTime deadline = LocalDateTime.now().minusMinutes(timeoutMinutes);
+        LocalDateTime deadline = LocalDateTime.now().minusMinutes(scheduledTimeoutMinutes);
         List<TripOrder> expiredList = orderMapper.selectList(new LambdaQueryWrapper<TripOrder>()
                 .eq(TripOrder::getStatus, "CREATED")
                 .lt(TripOrder::getCreatedAt, deadline));
         for (TripOrder order : expiredList) {
             try {
-                order.setStatus("EXPIRED");
-                order.setCancelReason("超时未支付自动关闭");
-                // 分片表更新必须带分片键（passenger_id），否则无法路由
-                orderMapper.update(order, new LambdaUpdateWrapper<TripOrder>()
-                        .eq(TripOrder::getId, order.getId())
-                        .eq(TripOrder::getPassengerId, order.getPassengerId()));
-                // 回补库存（Redis + 行程表 DB，双写一致）
-                tripSeatMapper.restoreSeat(order.getTripId(), order.getSeatCount());
-                restoreSeat(order.getTripId(), order.getSeatCount());
-                // 若订单用了券，退回给乘客（尽力而为）
-                if (order.getCouponId() != null) {
-                    callCouponReturn(order.getCouponId(), order.getPassengerId(), order.getOrderNo());
-                }
-                // 座位释放后，候补队列第一位自动补位（释放几个补几个）
-                promoteWaitlist(order.getTripId(), order.getSeatCount());
-                log.info("超时订单自动关闭 orderNo={}", order.getOrderNo());
+                closeExpiredOrder(order);
             } catch (Exception e) {
                 log.error("关闭超时订单失败 orderNo={}", order.getOrderNo(), e);
             }
