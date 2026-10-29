@@ -1,6 +1,7 @@
 package com.goshare.order.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
+import com.baomidou.mybatisplus.core.conditions.update.LambdaUpdateWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.goshare.common.exception.BusinessException;
 import com.goshare.common.result.Result;
@@ -187,7 +188,10 @@ public class OrderServiceImpl implements OrderService {
         }
         order.setStatus("CANCELLED");
         order.setCancelReason("用户主动取消");
-        orderMapper.updateById(order);
+        // 分片表更新必须带分片键（passenger_id），否则无法路由
+        orderMapper.update(order, new LambdaUpdateWrapper<TripOrder>()
+                .eq(TripOrder::getId, order.getId())
+                .eq(TripOrder::getPassengerId, order.getPassengerId()));
         // 回补库存（Redis + 行程表 DB，双写一致）
         tripSeatMapper.restoreSeat(order.getTripId(), order.getSeatCount());
         restoreSeat(order.getTripId(), order.getSeatCount());
@@ -226,7 +230,10 @@ public class OrderServiceImpl implements OrderService {
         }
         order.setStatus("PAID");
         order.setPaymentNo(paymentNo);
-        orderMapper.updateById(order);
+        // 分片表更新必须带分片键（passenger_id），否则无法路由
+        orderMapper.update(order, new LambdaUpdateWrapper<TripOrder>()
+                .eq(TripOrder::getId, order.getId())
+                .eq(TripOrder::getPassengerId, order.getPassengerId()));
         saveIdempotency(idemKey, BIZ_PAY_CALLBACK, order);
         // 若订单用了券，正式确认用券（尽力而为，券服务内部幂等）
         if (order.getCouponId() != null) {
@@ -265,7 +272,10 @@ public class OrderServiceImpl implements OrderService {
             try {
                 order.setStatus("EXPIRED");
                 order.setCancelReason("超时未支付自动关闭");
-                orderMapper.updateById(order);
+                // 分片表更新必须带分片键（passenger_id），否则无法路由
+                orderMapper.update(order, new LambdaUpdateWrapper<TripOrder>()
+                        .eq(TripOrder::getId, order.getId())
+                        .eq(TripOrder::getPassengerId, order.getPassengerId()));
                 // 回补库存（Redis + 行程表 DB，双写一致）
                 tripSeatMapper.restoreSeat(order.getTripId(), order.getSeatCount());
                 restoreSeat(order.getTripId(), order.getSeatCount());

@@ -78,7 +78,8 @@ mvn -pl go-share-user-server spring-boot:run
 - **Gateway 统一入口（8000）**：7 条路由全部指向服务名，全局 JWT 鉴权（白名单外必须携带 Bearer token，透传 X-User-Id）、Redis 令牌桶限流（单 IP 20 qps / 突发 40）、统一 401/限流返回格式
 - **ES 行程搜索**：行程发布同步到 Elasticsearch（goshare_trip 索引，出发时间秒级格式），搜索 ES 优先 + 数据库实时余座校准，ES 不可用自动降级 MySQL；提供全量同步运维接口
 - **候补递补**：行程满座后乘客可排队候补（Redis 有序集合按登记时间排序，重复登记幂等）；订单取消 / 超时释放座位后，候补第一位自动生成订单补位（固定幂等键防重复递补）
-- 阶段 3 联调验证：Nacos 服务数 8、网关登录 / 伪造 token 401、限流拦截、ES 搜索（石家庄→北京命中、反向为空、日期过滤）、候补递补（满座登记 → 取消释放 → 自动补位 → 队列清空）
+- **分库分表（ShardingSphere-JDBC 5.5.0）**：订单表按乘客ID取模路由到 trip_order_0 / trip_order_1（同库分表演示），主键由分片引擎雪花算法生成，未分片表走默认数据源；更新必须携带分片键；老数据已迁移、原表改名 trip_order_legacy 兜底
+- 阶段 3 联调验证：Nacos 服务数 8、网关登录 / 伪造 token 401、限流拦截、ES 搜索（石家庄→北京命中、反向为空、日期过滤）、候补递补（满座登记 → 取消释放 → 自动补位 → 队列清空）、分片路由（乘客ID 2→表0 / 3→表1、雪花主键、跨片查询、支付后状态更新）
 
 ## 阶段 1 接口速查
 
@@ -125,6 +126,8 @@ mvn -pl go-share-user-server spring-boot:run
 | trip | POST /api/trip/es-sync | ES 全量同步行程（运维接口） |
 | order | POST /api/order/waitlist | 候补登记（行程满座时排队，body: tripId） |
 | order | POST /api/order/waitlist/leave | 退出候补（body: tripId） |
+
+注：订单表分片脚本见 `sql/03-sharding-schema.sql`（建分片表 + 数据迁移 + 老表改名兜底），分片规则在 `ShardingDataSourceConfig.java`（Java API 手动装配，5.3+ 无独立 Starter）。
 
 ## Git 提交规范（中文）
 

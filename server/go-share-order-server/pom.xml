@@ -54,6 +54,19 @@
             <groupId>org.springframework.boot</groupId>
             <artifactId>spring-boot-starter-validation</artifactId>
         </dependency>
+        <!-- 分库分表：ShardingSphere-JDBC 5.5.0（订单表按乘客ID取模分片；5.5 单模块自带 Spring Boot 自动装配） -->
+        <dependency>
+            <groupId>org.apache.shardingsphere</groupId>
+            <artifactId>shardingsphere-jdbc</artifactId>
+            <version>5.5.0</version>
+            <exclusions>
+                <!-- 官方 5.5.0 POM 把测试工具误标为 compile 依赖，业务无需，排除 -->
+                <exclusion>
+                    <groupId>org.apache.shardingsphere</groupId>
+                    <artifactId>shardingsphere-test-util</artifactId>
+                </exclusion>
+            </exclusions>
+        </dependency>
         <!-- Lombok -->
         <dependency>
             <groupId>org.projectlombok</groupId>
