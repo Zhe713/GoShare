@@ -36,6 +36,9 @@ public class TripOrder {
     /** 券优惠金额 */
     private BigDecimal couponDiscount;
 
+    /** 使用的券ID（阶段2：下单用券抵扣） */
+    private Long couponId;
+
     /** 实付金额（元） */
     private BigDecimal payPrice;
 

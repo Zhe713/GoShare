@@ -66,6 +66,13 @@ mvn -pl go-share-user-server spring-boot:run
 - 支付服务（8005）：模拟支付、回调订单服务标记已支付（回调幂等）、重复支付拦截
 - 联调验证 12 项全部通过：幂等重复下单返回首次结果、余票不足拦截、取消回补、超时释放（EXPIRED+库存回补）、重复支付拦截
 
+### 阶段 2：优惠券服务 ✅（模板→领券→秒杀→锁定用券→支付确认→取消退券 全部联调通过）
+- 营销服务（8004）：券模板管理（满减 / 折扣 / 立减三种类型）、领券（每人限领一张，唯一索引兜底）、秒杀（Redis Lua 原子扣减做闸门 + DB 条件更新 received_count 兜底防超发）、我的券列表
+- 结算引擎（纯 Java，可单测）：满减需达门槛否则不抵扣、立减无门槛、折扣按总价 × 折扣率四舍五入、抵扣不超订单总额
+- 订单服务（8003）接入用券：下单带券 → 调券服务锁定并结算（couponDiscount / payPrice 落库）→ 支付成功确认用券（券状态 0→1）→ 取消 / 超时 / 下单异常退券（状态 3→0）
+- 券变动全量流水（coupon_log：RECEIVE / LOCK / USE / RETURN），便于审计
+- 联调验证 9 项全部通过：3 种券结算金额正确（满 50 减 10 / 8.5 折抵 9 元 / 立减）、重复领取被拦、秒杀限量 2 第 3 人抢光、重复领/DB 已满时 Redis 库存回补、支付后券确认已用、取消后券退回、已用券再下单被拦（"券不可用"）
+
 ## 阶段 1 接口速查
 
 | 服务 | 接口 | 说明 |
@@ -87,6 +94,21 @@ mvn -pl go-share-user-server spring-boot:run
 | order | GET /api/order/mine | 我的订单 |
 | payment | POST /api/payment/pay | 发起模拟支付 |
 | payment | GET /api/payment/{paymentNo} | 支付结果 |
+
+## 阶段 2 接口速查
+
+| 服务 | 接口 | 说明 |
+|---|---|---|
+| marketing | POST /api/coupon/template/create | 创建券模板（type: FULL_REDUCTION / DISCOUNT / CASH） |
+| marketing | GET /api/coupon/template/list | 券模板列表 |
+| marketing | POST /api/coupon/receive | 领券 / 秒杀抢券（body: templateId） |
+| marketing | GET /api/coupon/mine | 我的券（可按 status 筛选：0未用 1已用 2过期 3锁定） |
+| marketing | POST /api/coupon/settle | 用券结算（内部：锁定券 + 算抵扣） |
+| marketing | POST /api/coupon/confirm | 确认用券（内部：支付成功后调用，幂等） |
+| marketing | POST /api/coupon/return | 退券（内部：取消/超时/下单失败调用，幂等） |
+| order | POST /api/order/create | 下单（body 可带 couponId，锁定券并结算抵扣） |
+
+注：coupon_id 字段通过 `sql/02-coupon-schema.sql` 末尾动态 ALTER 添加（MySQL 8 兼容写法）。
 
 ## Git 提交规范（中文）
 

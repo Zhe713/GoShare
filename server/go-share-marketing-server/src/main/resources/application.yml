@@ -4,6 +4,29 @@ server:
 spring:
   application:
     name: go-share-marketing-server
+  datasource:
+    url: jdbc:mysql://localhost:3306/goshare?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: root123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+  data:
+    redis:
+      host: localhost
+      port: 6379
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+
+# 项目自定义配置
+goshare:
+  jwt:
+    secret: go-share-demo-jwt-secret-please-change-in-prod-0123456789
+    expire-hours: 24
 
 management:
   endpoints:

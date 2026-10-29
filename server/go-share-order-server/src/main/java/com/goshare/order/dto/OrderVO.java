@@ -23,6 +23,11 @@ public class OrderVO {
 
     private BigDecimal totalPrice;
 
+    private BigDecimal couponDiscount;
+
+    /** 使用的券ID */
+    private Long couponId;
+
     private BigDecimal payPrice;
 
     /** CREATED待支付 PAID已支付 IN_SERVICE服务中 COMPLETED已完成 CANCELLED已取消 EXPIRED超时关闭 */

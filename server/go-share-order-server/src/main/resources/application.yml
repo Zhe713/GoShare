@@ -32,6 +32,8 @@ goshare:
     timeout-minutes: 15
     # 行程服务地址（服务间调用）
     trip-service-url: http://localhost:8002
+    # 券服务地址（用券结算/确认/退回）
+    marketing-service-url: http://localhost:8004
 
 management:
   endpoints:

@@ -1,12 +1,14 @@
 package com.goshare.marketing;
 
+import org.mybatis.spring.annotation.MapperScan;
 import org.springframework.boot.SpringApplication;
 import org.springframework.boot.autoconfigure.SpringBootApplication;
 
 /**
  * 券服务启动类
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = "com.goshare")
+@MapperScan("com.goshare.marketing.mapper")
 public class MarketingServerApplication {
 
     public static void main(String[] args) {

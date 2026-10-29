@@ -21,4 +21,7 @@ public class OrderCreateRequest {
     /** 幂等键：前端生成，防重复下单 */
     @NotBlank(message = "幂等键不能为空")
     private String idempotentKey;
+
+    /** 优惠券ID（可选，下单用券抵扣） */
+    private Long couponId;
 }

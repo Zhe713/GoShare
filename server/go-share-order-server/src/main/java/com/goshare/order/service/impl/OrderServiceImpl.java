@@ -4,6 +4,7 @@ import com.baomidou.mybatisplus.core.conditions.query.LambdaQueryWrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.goshare.common.exception.BusinessException;
 import com.goshare.common.result.Result;
+import com.goshare.order.dto.CouponSettleResult;
 import com.goshare.order.dto.OrderCreateRequest;
 import com.goshare.order.dto.OrderVO;
 import com.goshare.order.dto.TripDTO;
@@ -20,6 +21,7 @@ import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
+import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
@@ -30,6 +32,7 @@ import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
+import java.util.Map;
 import java.util.concurrent.ThreadLocalRandom;
 import java.util.stream.Collectors;
 
@@ -76,6 +79,9 @@ public class OrderServiceImpl implements OrderService {
     @Value("${goshare.order.timeout-minutes}")
     private long timeoutMinutes;
 
+    @Value("${goshare.order.marketing-service-url}")
+    private String marketingServiceUrl;
+
     @Override
     @Transactional(rollbackFor = Exception.class)
     public OrderVO create(Long passengerId, OrderCreateRequest request) {
@@ -108,29 +114,45 @@ public class OrderServiceImpl implements OrderService {
             throw new BusinessException(400, "行程库存未初始化");
         }
 
+        String orderNo = null;
         try {
             // 4. DB 条件扣减（双写：Redis 并发闸门 + DB 兜底，防超卖）
             if (tripSeatMapper.deductSeat(request.getTripId(), request.getSeatCount()) == 0) {
                 throw new BusinessException(400, "余票不足");
             }
-            // 5. 创建订单（CREATED 待支付）
+            // 5. 生成订单号，若带券则调用券服务锁定并结算抵扣
+            orderNo = generateOrderNo();
             BigDecimal price = trip.getPrice().multiply(BigDecimal.valueOf(request.getSeatCount()));
+            BigDecimal discount = BigDecimal.ZERO;
+            if (request.getCouponId() != null) {
+                CouponSettleResult settle = callCouponSettle(
+                        request.getCouponId(), passengerId, orderNo, price);
+                discount = settle.getDiscount();
+                price = settle.getPayPrice();
+            }
+            // 6. 创建订单（CREATED 待支付）
             TripOrder order = new TripOrder();
-            order.setOrderNo(generateOrderNo());
+            order.setOrderNo(orderNo);
             order.setTripId(request.getTripId());
             order.setPassengerId(passengerId);
             order.setSeatCount(request.getSeatCount());
-            order.setTotalPrice(price);
-            order.setCouponDiscount(BigDecimal.ZERO);
+            order.setTotalPrice(trip.getPrice().multiply(BigDecimal.valueOf(request.getSeatCount())));
+            order.setCouponDiscount(discount);
+            order.setCouponId(request.getCouponId());
             order.setPayPrice(price);
             order.setStatus("CREATED");
             orderMapper.insert(order);
 
-            // 6. 写幂等记录（唯一索引防并发；冲突说明首次请求已成功）
+            // 7. 写幂等记录（唯一索引防并发；冲突说明首次请求已成功）
             saveIdempotency(idemKey, BIZ_CREATE_ORDER, order);
             return toVO(order);
         } catch (DuplicateKeyException e) {
-            // 并发重复请求：另一个请求已扣库存并建单，返回它的首次结果
+            // 并发重复请求：本请求的库存扣减作废，回补（首次请求已成功扣减建单）
+            restoreSeat(request.getTripId(), request.getSeatCount());
+            // 若本请求已锁定券，一并退回
+            if (request.getCouponId() != null && orderNo != null) {
+                callCouponReturn(request.getCouponId(), passengerId, orderNo);
+            }
             IdempotencyRecord first = getByIdempotency(idemKey);
             if (first != null) {
                 return parseVO(first.getResponseJson());
@@ -139,6 +161,10 @@ public class OrderServiceImpl implements OrderService {
         } catch (Exception e) {
             // 业务失败（如 DB 异常）回补 Redis 库存，避免扣了票却没建单
             restoreSeat(request.getTripId(), request.getSeatCount());
+            // 若已锁定券，一并退回
+            if (request.getCouponId() != null && orderNo != null) {
+                callCouponReturn(request.getCouponId(), passengerId, orderNo);
+            }
             throw e;
         }
     }
@@ -161,6 +187,10 @@ public class OrderServiceImpl implements OrderService {
         // 回补库存（Redis + 行程表 DB，双写一致）
         tripSeatMapper.restoreSeat(order.getTripId(), order.getSeatCount());
         restoreSeat(order.getTripId(), order.getSeatCount());
+        // 若订单用了券，退回给乘客（尽力而为）
+        if (order.getCouponId() != null) {
+            callCouponReturn(order.getCouponId(), order.getPassengerId(), orderNo);
+        }
         return toVO(order);
     }
 
@@ -192,6 +222,10 @@ public class OrderServiceImpl implements OrderService {
         order.setPaymentNo(paymentNo);
         orderMapper.updateById(order);
         saveIdempotency(idemKey, BIZ_PAY_CALLBACK, order);
+        // 若订单用了券，正式确认用券（尽力而为，券服务内部幂等）
+        if (order.getCouponId() != null) {
+            callCouponConfirm(order.getCouponId(), order.getPassengerId(), orderNo);
+        }
         return toVO(order);
     }
 
@@ -229,6 +263,10 @@ public class OrderServiceImpl implements OrderService {
                 // 回补库存（Redis + 行程表 DB，双写一致）
                 tripSeatMapper.restoreSeat(order.getTripId(), order.getSeatCount());
                 restoreSeat(order.getTripId(), order.getSeatCount());
+                // 若订单用了券，退回给乘客（尽力而为）
+                if (order.getCouponId() != null) {
+                    callCouponReturn(order.getCouponId(), order.getPassengerId(), order.getOrderNo());
+                }
                 log.info("超时订单自动关闭 orderNo={}", order.getOrderNo());
             } catch (Exception e) {
                 log.error("关闭超时订单失败 orderNo={}", order.getOrderNo(), e);
@@ -264,6 +302,49 @@ public class OrderServiceImpl implements OrderService {
             return null;
         } catch (Exception e) {
             throw new BusinessException(500, "行程服务暂不可用，请稍后重试");
+        }
+    }
+
+    /** 调用券服务：用券结算（锁定券并算抵扣），失败则下单失败 */
+    private CouponSettleResult callCouponSettle(Long couponId, Long userId, String orderNo, BigDecimal totalPrice) {
+        try {
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of(
+                    "couponId", couponId, "userId", userId, "orderNo", orderNo, "totalPrice", totalPrice));
+            Result<CouponSettleResult> result = restTemplate.exchange(
+                            marketingServiceUrl + "/api/coupon/settle",
+                            HttpMethod.POST, entity,
+                            new ParameterizedTypeReference<Result<CouponSettleResult>>() {})
+                    .getBody();
+            if (result == null || result.getCode() != 200) {
+                throw new BusinessException(400, result == null ? "用券失败" : result.getMessage());
+            }
+            return result.getData();
+        } catch (BusinessException e) {
+            throw e;
+        } catch (Exception e) {
+            throw new BusinessException(500, "券服务暂不可用，请稍后重试");
+        }
+    }
+
+    /** 调用券服务：支付成功确认用券（尽力而为） */
+    private void callCouponConfirm(Long couponId, Long userId, String orderNo) {
+        try {
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of(
+                    "couponId", couponId, "userId", userId, "orderNo", orderNo));
+            restTemplate.postForEntity(marketingServiceUrl + "/api/coupon/confirm", entity, Result.class);
+        } catch (Exception e) {
+            log.warn("确认用券失败 couponId={} orderNo={}", couponId, orderNo, e);
+        }
+    }
+
+    /** 调用券服务：退券（尽力而为） */
+    private void callCouponReturn(Long couponId, Long userId, String orderNo) {
+        try {
+            HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of(
+                    "couponId", couponId, "userId", userId, "orderNo", orderNo));
+            restTemplate.postForEntity(marketingServiceUrl + "/api/coupon/return", entity, Result.class);
+        } catch (Exception e) {
+            log.warn("退券失败 couponId={} orderNo={}", couponId, orderNo, e);
         }
     }
 
@@ -311,6 +392,8 @@ public class OrderServiceImpl implements OrderService {
         vo.setPassengerId(order.getPassengerId());
         vo.setSeatCount(order.getSeatCount());
         vo.setTotalPrice(order.getTotalPrice());
+        vo.setCouponDiscount(order.getCouponDiscount());
+        vo.setCouponId(order.getCouponId());
         vo.setPayPrice(order.getPayPrice());
         vo.setStatus(order.getStatus());
         vo.setPaymentNo(order.getPaymentNo());
