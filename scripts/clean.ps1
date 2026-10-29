@@ -1,4 +1,4 @@
-# GoShare 清理脚本
+﻿# GoShare 清理脚本
 # 用法：
 #   .\clean.ps1           # 清理构建产物、日志、临时目录
 #   .\clean.ps1 -DockerDown  # 同时停掉 docker compose 容器

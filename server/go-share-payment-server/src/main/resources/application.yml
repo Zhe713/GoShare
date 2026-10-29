@@ -4,6 +4,28 @@ server:
 spring:
   application:
     name: go-share-payment-server
+  datasource:
+    url: jdbc:mysql://localhost:3306/goshare?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: root123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+    log-impl: org.apache.ibatis.logging.stdout.StdOutImpl
+  global-config:
+    db-config:
+      id-type: auto
+
+# 项目自定义配置
+goshare:
+  jwt:
+    secret: go-share-demo-jwt-secret-please-change-in-prod-0123456789
+    expire-hours: 24
+  payment:
+    # 订单服务地址（支付回调目标）
+    order-service-url: http://localhost:8003
 
 management:
   endpoints:

@@ -52,6 +52,42 @@ mvn -pl go-share-user-server spring-boot:run
 
 验证：访问 `http://localhost:8001/api/ping` 应返回 `{"code":200,...}`。
 
+## 阶段进度
+
+### 阶段 0：环境与骨架 ✅
+- Maven 3.9.16 + 11 模块多模块工程（父 + common + api + gateway + 7 服务）编译通过
+- docker-compose 拉起 6 个中间件：MySQL / Redis / RocketMQ 4.9.7（含控制台）/ Elasticsearch / Nacos
+- Git 初始化（中文提交规范）、数据库 6 张核心表建表完成
+
+### 阶段 1：核心链路 ✅（注册→登录→发布→搜索→下单→支付→状态流转 全部联调通过）
+- 用户服务（8001）：注册即登录、JWT 鉴权、实名认证、车主认证与审核
+- 行程服务（8002）：发布行程（Redis 初始化座位库存）、按路线/日期搜索、详情、我的行程
+- 订单服务（8003）：下单防重复（幂等键表 + 唯一索引兜底）、Redis Lua 原子扣减 + DB 条件扣减双写、取消/超时自动释放并回补库存（15 分钟定时扫描）
+- 支付服务（8005）：模拟支付、回调订单服务标记已支付（回调幂等）、重复支付拦截
+- 联调验证 12 项全部通过：幂等重复下单返回首次结果、余票不足拦截、取消回补、超时释放（EXPIRED+库存回补）、重复支付拦截
+
+## 阶段 1 接口速查
+
+| 服务 | 接口 | 说明 |
+|---|---|---|
+| user | POST /api/user/register | 注册（直接返回 token） |
+| user | POST /api/user/login | 登录 |
+| user | GET /api/user/me | 当前用户（需 Bearer token） |
+| user | POST /api/user/real-name-verify | 实名认证 |
+| user | POST /api/driver/certification/apply | 车主认证申请 |
+| user | POST /api/driver/certification/audit | 认证审核（通过后角色变 DRIVER） |
+| trip | POST /api/trip/publish | 发布行程（仅车主） |
+| trip | GET /api/trip/search?fromCity=&toCity=&departDate= | 搜索行程 |
+| trip | GET /api/trip/{tripId} | 行程详情 |
+| trip | GET /api/trip/mine | 我发布的行程 |
+| order | POST /api/order/create | 下单（需幂等键） |
+| order | POST /api/order/cancel | 取消（回补库存） |
+| order | POST /api/order/pay-callback | 支付回调（内部，幂等） |
+| order | GET /api/order/{orderNo} | 订单详情 |
+| order | GET /api/order/mine | 我的订单 |
+| payment | POST /api/payment/pay | 发起模拟支付 |
+| payment | GET /api/payment/{paymentNo} | 支付结果 |
+
 ## Git 提交规范（中文）
 
 所有提交信息使用中文，格式为 `类型(模块)：中文描述`：
