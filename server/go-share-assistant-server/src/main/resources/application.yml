@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: go-share-assistant-server
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
 
 management:
   endpoints:

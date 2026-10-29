@@ -19,6 +19,13 @@
             <groupId>com.goshare</groupId>
             <artifactId>go-share-common</artifactId>
             <version>${project.version}</version>
+            <!-- 排除 Servlet Web 依赖：Gateway 基于 WebFlux 响应式，与 Spring MVC 冲突 -->
+            <exclusions>
+                <exclusion>
+                    <groupId>org.springframework.boot</groupId>
+                    <artifactId>spring-boot-starter-web</artifactId>
+                </exclusion>
+            </exclusions>
         </dependency>
         <dependency>
             <groupId>org.springframework.cloud</groupId>

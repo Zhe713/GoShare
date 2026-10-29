@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: go-share-payment-server
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
   datasource:
     url: jdbc:mysql://localhost:3306/goshare?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: root
@@ -24,8 +28,8 @@ goshare:
     secret: go-share-demo-jwt-secret-please-change-in-prod-0123456789
     expire-hours: 24
   payment:
-    # 订单服务地址（支付回调目标）
-    order-service-url: http://localhost:8003
+    # 订单服务地址（Nacos 服务名 + 负载均衡，支付回调目标）
+    order-service-url: http://go-share-order-server
 
 management:
   endpoints:

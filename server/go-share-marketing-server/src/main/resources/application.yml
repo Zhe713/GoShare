@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: go-share-marketing-server
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
   datasource:
     url: jdbc:mysql://localhost:3306/goshare?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: root

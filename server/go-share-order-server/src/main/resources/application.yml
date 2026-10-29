@@ -4,6 +4,10 @@ server:
 spring:
   application:
     name: go-share-order-server
+  cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
   datasource:
     url: jdbc:mysql://localhost:3306/goshare?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
     username: root
@@ -30,10 +34,10 @@ goshare:
   order:
     # 待支付订单超时分钟数
     timeout-minutes: 15
-    # 行程服务地址（服务间调用）
-    trip-service-url: http://localhost:8002
+    # 行程服务地址（Nacos 服务名 + 负载均衡）
+    trip-service-url: http://go-share-trip-server
     # 券服务地址（用券结算/确认/退回）
-    marketing-service-url: http://localhost:8004
+    marketing-service-url: http://go-share-marketing-server
 
 management:
   endpoints:

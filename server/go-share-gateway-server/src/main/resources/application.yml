@@ -5,6 +5,9 @@ spring:
   application:
     name: go-share-gateway-server
   cloud:
+    nacos:
+      discovery:
+        server-addr: localhost:8848
     gateway:
       routes:
         - id: user
