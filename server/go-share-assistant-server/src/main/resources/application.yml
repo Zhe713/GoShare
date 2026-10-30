@@ -8,6 +8,45 @@ spring:
     nacos:
       discovery:
         server-addr: localhost:8848
+  data:
+    redis:
+      host: localhost
+      port: 6379
+    elasticsearch:
+      uris: localhost:9200
+  datasource:
+    url: jdbc:mysql://localhost:3306/goshare?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai
+    username: root
+    password: root123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+mybatis-plus:
+  configuration:
+    map-underscore-to-camel-case: true
+  global-config:
+    db-config:
+      id-type: auto
+
+# 项目自定义配置
+goshare:
+  jwt:
+    secret: go-share-demo-jwt-secret-please-change-in-prod-0123456789
+    expire-hours: 24
+  llm:
+    # 模型接入方式：mock（默认，可演示零成本）| http（接真实 API，配置 http-url/api-key）
+    mode: mock
+    http-url: http://localhost:9999/v1/chat/completions
+    api-key: mock-key
+    # 数据版本号：行程价格/余座/券规则变化时 +1，所有旧答案缓存自动作废（防止把旧数据答出去）
+    data-version: 1
+    # 固定前缀校验开关：所有 prompt 必须以系统前缀开头（保证缓存复用 + 防注入）
+    prefix-check: true
+  ai:
+    # 服务间调用地址（Nacos 服务名 + 负载均衡）
+    order-service-url: http://go-share-order-server
+    trip-service-url: http://go-share-trip-server
+    user-service-url: http://go-share-user-server
+    notify-service-url: http://go-share-notify-server
 
 management:
   endpoints:

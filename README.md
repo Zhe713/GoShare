@@ -91,6 +91,24 @@ mvn -pl go-share-user-server spring-boot:run
   - 压测脚本：`jmeter/jmeter-sceneA-nosellout.jmx`、`jmeter/jmeter-sceneB-gateway-limit.jmx`；完整结论见 `reports/阶段4压测报告.md`
 - 阶段 4 链路验证：下单 → MQ 延时消息发送（日志确认）→ 10 分钟后消费者消费 → 订单 EXPIRED + Redis 消费去重键 + 余座回补 3 → 兜底定时扫描（12 分钟）在消息路径异常时仍可关单（历史验证）
 
+### 阶段 5：AI 出行助手 ✅（A1 语义化搜索与智能撮合 / A2 取消挽留+费用解释 / B1 工单摘要+回复草稿 / 省 token 四关卡 / 天气提醒）
+- **新增服务**：`go-share-assistant-server`（8007，AI 能力聚合层，LLM 可插拔 mock/http）、`go-share-notify-server`（8006，天气+发车提醒体验项，天气数据源可插拔 mock/高德）
+- **A1 语义化搜索与智能撮合（列表/排序/金额一律代码产出，LLM 不参与生成）**：
+  - NL→结构化：规则模板解析（`NlTripParser`：从X到Y/去Y/回Y/今天/明天/后天/周X/时段 12点 20点/大件/便宜，未识别条件不参与查询）
+  - 两阶段召回排序：ES 动态 DSL 粗排（状态可订+出发时间>now，按条件追加起终点/日期/时段±2h 窗，异常返回空降级 trip `/api/trip/search`）→ CompletableFuture 并行取车主信任分（user 服务）+ 行程备注（trip 服务）→ 细排打分（时间 0.35/余座 0.25/信任 0.25/价格 0.15，大件偏好降权）
+  - 特征解释层：每个候选输出总分 + 命中原因（"为什么推荐这几单"可追溯）
+- **A2 智能取消挽留 + 费用解释（金额不靠 LLM）**：order 侧 `FeeCalculator` 纯 Java 判责（CREATED 未支付无费；距发车 ≥120min 无责全额退；<120min 实付 20% 违约金封顶 50；BigDecimal HALF_UP）→ `POST /api/order/cancel-preview` → assistant 组合同路线替代方案（排除当前行程、未来、limit 3）→ LLM 只生成挽留话术（金额/行程数据代码注入）→ Redis 幂等（同一订单只挽留一次 24h）
+- **B1 工单会话摘要 + 回复草稿**：关键词规则分类（退款/改期/候补/其他）→ 摘要提炼真实会话内容 → 分类模板回复草稿（含订单号可直接发）→ Redis 幂等（摘要只触发一次控成本）
+- **省 token 四关卡（`LlmGateway` 统一网关 + `llm_call_log` 全量记账）**：
+  - 关卡1 答案缓存：`ai:ans:v{dataVersion}:{md5}` TTL 12h（带数据版本号，版本+1 旧答案自动作废）
+  - 关卡2 小模型先答：固定前缀意图（取消收费/违约金/退钱/候补/用券/扣钱/费用 等规则模板）零调用
+  - 关卡3 固定前缀：所有 prompt 强制 `SYSTEM_PREFIX` 开头（厂商缓存复用 + 防注入）
+  - 关卡4 夜间预生成：`@Scheduled` 凌晨 3 点预生成 5 条热点问答入缓存；每次处理写 llm_call_log（biz_type/model/token/耗时/cache_hit/gate_skipped），`GET /api/assistant/llm-stats` 出统计
+- **天气提醒体验项（可插拔 key 的 mock 设计）**：`GET /api/notify/weather?city=`（石家庄/北京/邯郸/天津/保定内置演示数据）、`GET /api/notify/trip-reminder?orderNo=`（订单行程 + 出发地天气组装发车提醒文案）
+- **新表**：`llm_call_log`（LLM 记账）、`work_order`/`work_order_message`（工单与会话）、`user.trust_score`（撮合排序特征，默认 5.0）
+- **阶段 5 联调验证（12 项）**：A1（"周五18点从石家庄去邯郸，能带大件"→ 结构化回显+大件优先排序+解释；"明天去北京"→ 单条件召回）、chat 缓存命中（第 2 次 fromCache=true）、规则拦截记账（llm-stats 命中率/拦截率）、A2（PAID 无责全额退 / CREATED 无扣款 + 替代方案 + 话术 + 幂等 alreadyRetained）、B1（退款分类+摘要+草稿+firstTime 幂等）、天气 + 发车提醒
+- **单测 18 个全绿**：`FeeCalculatorTest`（判责时间窗边界 120/119 分钟、20% 违约金、50 封顶、CREATED/IN_SERVICE/CANCELLED）、`NlTripParserTest`（golden 用例）、`MatchRerankerTest`（权重排序/大件降权/余座优先）、`RuleAnswerProviderTest`（规则命中）
+
 ## 阶段 1 接口速查
 
 | 服务 | 接口 | 说明 |

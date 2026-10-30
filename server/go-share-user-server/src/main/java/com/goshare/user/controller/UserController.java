@@ -13,6 +13,7 @@ import jakarta.validation.Valid;
 import lombok.RequiredArgsConstructor;
 import org.springframework.beans.BeanUtils;
 import org.springframework.web.bind.annotation.GetMapping;
+import org.springframework.web.bind.annotation.PathVariable;
 import org.springframework.web.bind.annotation.PostMapping;
 import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
@@ -43,6 +44,15 @@ public class UserController {
     @GetMapping("/me")
     public Result<UserVO> me(@RequestHeader(value = "Authorization", required = false) String auth) {
         Long userId = currentUserResolver.resolveUserId(auth);
+        User user = userService.getUserById(userId);
+        UserVO vo = new UserVO();
+        BeanUtils.copyProperties(user, vo);
+        return Result.success(vo);
+    }
+
+    /** 按用户ID查询（供出行助手撮合排序取信任分等特征） */
+    @GetMapping("/{userId}")
+    public Result<UserVO> getById(@PathVariable("userId") Long userId) {
         User user = userService.getUserById(userId);
         UserVO vo = new UserVO();
         BeanUtils.copyProperties(user, vo);

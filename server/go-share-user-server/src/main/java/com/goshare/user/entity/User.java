@@ -47,6 +47,9 @@ public class User {
     /** 状态 1正常 0禁用 */
     private Integer status;
 
+    /** 车主信任分 0-5（A1 撮合排序特征） */
+    private java.math.BigDecimal trustScore;
+
     private LocalDateTime createdAt;
 
     private LocalDateTime updatedAt;

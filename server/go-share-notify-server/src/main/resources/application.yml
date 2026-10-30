@@ -9,6 +9,18 @@ spring:
       discovery:
         server-addr: localhost:8848
 
+# 项目自定义配置
+goshare:
+  weather:
+    # 天气数据源：mock（默认，内置演示数据）| http（接真实天气 API，配置 http-url/api-key）
+    mode: mock
+    http-url: https://restapi.amap.com/v3/weather/weatherInfo
+    api-key: your-key-here
+  notify:
+    # 订单服务地址（发车提醒：取订单/行程信息）
+    order-service-url: http://go-share-order-server
+    trip-service-url: http://go-share-trip-server
+
 management:
   endpoints:
     web:

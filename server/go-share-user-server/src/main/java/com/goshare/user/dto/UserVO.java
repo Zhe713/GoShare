@@ -23,4 +23,7 @@ public class UserVO {
     private Integer driverVerified;
 
     private String role;
+
+    /** 车主信任分 0-5（撮合排序特征） */
+    private java.math.BigDecimal trustScore;
 }

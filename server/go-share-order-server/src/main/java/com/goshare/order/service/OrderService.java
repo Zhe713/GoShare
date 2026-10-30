@@ -16,6 +16,9 @@ public interface OrderService {
     /** 取消订单（待支付订单取消并回补库存） */
     OrderVO cancel(Long passengerId, String orderNo);
 
+    /** 取消挽留预览（A2：按时间窗判责并计算违约金/退款，费用一律 FeeCalculator 纯 Java 计算） */
+    com.goshare.order.util.FeeCalculator.FeeBreakdown cancelPreview(String orderNo);
+
     /** 支付成功回调（幂等处理，待支付→已支付） */
     OrderVO handlePayCallback(String orderNo, String paymentNo);
 

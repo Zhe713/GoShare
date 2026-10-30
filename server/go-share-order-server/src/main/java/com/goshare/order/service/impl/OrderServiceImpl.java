@@ -269,6 +269,22 @@ public class OrderServiceImpl implements OrderService {
                 .stream().map(this::toVO).collect(Collectors.toList());
     }
 
+    @Override
+    public com.goshare.order.util.FeeCalculator.FeeBreakdown cancelPreview(String orderNo) {
+        TripOrder order = orderMapper.selectOne(new LambdaQueryWrapper<TripOrder>()
+                .eq(TripOrder::getOrderNo, orderNo));
+        if (order == null) {
+            throw new BusinessException(404, "订单不存在");
+        }
+        // 行程出发时间（判责时间窗）来自行程服务
+        TripDTO trip = fetchTrip(order.getTripId());
+        if (trip == null) {
+            throw new BusinessException(500, "行程服务暂不可用，无法计算费用");
+        }
+        // 费用一律由 FeeCalculator 纯 Java 计算（金额不靠 LLM）
+        return com.goshare.order.util.FeeCalculator.calc(order, trip.getDepartureTime(), LocalDateTime.now());
+    }
+
     /** 发送 RocketMQ 延时消息：待支付订单到期自动关闭（10 分钟后触发） */
     private void sendTimeoutDelayMessage(String orderNo) {
         try {

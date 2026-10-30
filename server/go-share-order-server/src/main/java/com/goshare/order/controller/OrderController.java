@@ -47,6 +47,12 @@ public class OrderController {
         return Result.success(orderService.cancel(passengerId, request.getOrderNo()));
     }
 
+    /** 取消挽留预览（A2 费用解释：按时间窗判责，违约金/退款由 FeeCalculator 纯 Java 计算） */
+    @PostMapping("/cancel-preview")
+    public Result<com.goshare.order.util.FeeCalculator.FeeBreakdown> cancelPreview(@RequestBody @Valid OrderCancelRequest request) {
+        return Result.success(orderService.cancelPreview(request.getOrderNo()));
+    }
+
     /** 支付成功回调（支付服务调用，幂等） */
     @PostMapping("/pay-callback")
     public Result<OrderVO> payCallback(@RequestBody @Valid PayCallbackRequest request) {
