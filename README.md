@@ -91,8 +91,7 @@ mvn -pl go-share-user-server spring-boot:run
   - 压测脚本：`jmeter/jmeter-sceneA-nosellout.jmx`、`jmeter/jmeter-sceneB-gateway-limit.jmx`；完整结论见 `reports/阶段4压测报告.md`
 - 阶段 4 链路验证：下单 → MQ 延时消息发送（日志确认）→ 10 分钟后消费者消费 → 订单 EXPIRED + Redis 消费去重键 + 余座回补 3 → 兜底定时扫描（12 分钟）在消息路径异常时仍可关单（历史验证）
 
-### 阶段 5：AI 出行助手 ✅（A1 语义化搜索与智能撮合 / A2 取消挽留+费用解释 / B1 工单摘要+回复草稿 / 省 token 四关卡 / 天气提醒）
-- **新增服务**：`go-share-assistant-server`（8007，AI 能力聚合层，LLM 可插拔 mock/http）、`go-share-notify-server`（8006，天气+发车提醒体验项，天气数据源可插拔 mock/高德）
+### 阶段 5：AI 出行助手 ✅（A1 语义化搜索与智能撮合 / A2 取消挽留+费用解释 / B1 工单摘要+回复草稿 / 省 token 四关卡 / 天气提醒）- **新增服务**：`go-share-assistant-server`（8007，AI 能力聚合层，LLM 可插拔 mock/http）、`go-share-notify-server`（8006，天气+发车提醒体验项，天气数据源可插拔 mock/高德）
 - **A1 语义化搜索与智能撮合（列表/排序/金额一律代码产出，LLM 不参与生成）**：
   - NL→结构化：规则模板解析（`NlTripParser`：从X到Y/去Y/回Y/今天/明天/后天/周X/时段 12点 20点/大件/便宜，未识别条件不参与查询）
   - 两阶段召回排序：ES 动态 DSL 粗排（状态可订+出发时间>now，按条件追加起终点/日期/时段±2h 窗，异常返回空降级 trip `/api/trip/search`）→ CompletableFuture 并行取车主信任分（user 服务）+ 行程备注（trip 服务）→ 细排打分（时间 0.35/余座 0.25/信任 0.25/价格 0.15，大件偏好降权）
@@ -108,6 +107,15 @@ mvn -pl go-share-user-server spring-boot:run
 - **新表**：`llm_call_log`（LLM 记账）、`work_order`/`work_order_message`（工单与会话）、`user.trust_score`（撮合排序特征，默认 5.0）
 - **阶段 5 联调验证（12 项）**：A1（"周五18点从石家庄去邯郸，能带大件"→ 结构化回显+大件优先排序+解释；"明天去北京"→ 单条件召回）、chat 缓存命中（第 2 次 fromCache=true）、规则拦截记账（llm-stats 命中率/拦截率）、A2（PAID 无责全额退 / CREATED 无扣款 + 替代方案 + 话术 + 幂等 alreadyRetained）、B1（退款分类+摘要+草稿+firstTime 幂等）、天气 + 发车提醒
 - **单测 18 个全绿**：`FeeCalculatorTest`（判责时间窗边界 120/119 分钟、20% 违约金、50 封顶、CREATED/IN_SERVICE/CANCELLED）、`NlTripParserTest`（golden 用例）、`MatchRerankerTest`（权重排序/大件降权/余座优先）、`RuleAnswerProviderTest`（规则命中）
+
+### 阶段 6：前端三端 ✅（三主题 token 体系 / 14 个 g-ui 组件 / H5 Glass 8 页 / 后台 Minimal / 大屏 Aurora / Storybook / 20 条精致度验收）
+- **工程**：`web/` Vue3 + TS strict + Vite5 三入口（main/admin/screen 多页）+ Pinia + Router + axios，`/api` dev proxy → 网关 8000；H5 主包 gzip 33KB（预算 180KB）
+- **双级 design token**：L1 基础（色/灰阶/字号七档/间距 8pt/圆角 8-12-20-28/阴影三级/动效）→ L2 语义三主题（Glass 深色玻璃/ Minimal 浅灰白卡无模糊 / Aurora 深色发光），根节点 `data-theme` 一键切换，页面禁止裸样式值
+- **14 个 g-ui 组件**（统一 `src/g-ui/index.ts` 出口）：GButton 三型四态（按下 scale.97/禁用/加载 spinner）、GCard、GInput（44/48、聚焦 2px 品牌描边、error/disabled）、GNavBar（sticky+返回）、GTabBar（内置线性 SVG 图标一套）、GSheet（320ms ease-out-expo 抽屉）、GDialog、GToast（2.5s 自动消失）、GSkeleton（微光 1.6s 唯一循环动画）、GEmpty/GError（空/错三态）、GTripCard（热度三色条+信任分）、GCouponCard（虚线撕口+三态+已用印章）、GChatBubble（用户渐变实色/助手玻璃）
+- **H5 8 页（Glass）**：首页/口语搜索（A1 语义搜索→结构化回显+解释层）/行程详情+下单/订单/收银台（等宽倒计时）/券包（三态）/我的/AI 助手（四关卡标注：缓存命中/规则小模型）；全部接真实接口
+- **管理后台（Minimal）**：行程管理表（真实数据）/AI 助手测试（可观察缓存命中）/帮助；**数据大屏（Aurora）**：ECharts 价格分布（真实行程）/信任分布/LLM 调用缓存命中率（真实 llm-stats）
+- **工程化**：Vitest 20 用例全绿（金额/时间/倒计时 utils + 组件冒烟四态/三态）；Storybook 14 组件全状态预览；`docs/GoShare-前端-阶段6验收.md` 逐条打勾（20 条中 19 条达标，LCP 留待浏览器实测；Stylelint 裸样式门禁 + Playwright 截图对比归阶段 7）
+- **阶段 6 联调验证**：经 vite proxy 登录→搜索→语义搜索（top 0.94+reasons）→规则小模型拦截→下单→支付（CREATED→SUCCESS）→领券（幂等拦截）→llm-stats（缓存命中率 46.7%/拦截率 20%）
 
 ## 阶段 1 接口速查
 

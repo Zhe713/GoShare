@@ -1,0 +1,70 @@
+/**
+ * GoShare 设计体系 · 语义 token（L2）——三套主题
+ * 根节点 data-theme="glass|minimal|aurora"，组件只读 token 不感知主题
+ * 规范来源：docs/GoShare-前端视觉规范.md 第三节
+ */
+:root {
+  /* ===== Glass 玻璃（默认，H5）===== */
+  --bg-base: #0b1020;
+  --bg-glow-1: rgba(64, 158, 255, 0.35);
+  --bg-glow-2: rgba(255, 94, 196, 0.22);
+  --surface: var(--alpha-08);
+  --surface-strong: var(--alpha-14);
+  --border: var(--alpha-22);
+  --text-1: rgba(255, 255, 255, 0.95);
+  --text-2: rgba(255, 255, 255, 0.66);
+  --text-3: rgba(255, 255, 255, 0.42);
+  --brand: var(--c-blue-500);
+  --brand-grad: linear-gradient(135deg, #4f8cff, #7c5cff);
+  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.18);
+  --shadow-2: 0 8px 32px rgba(0, 0, 0, 0.28);
+  --shadow-3: 0 12px 40px rgba(0, 0, 0, 0.35);
+  --highlight: inset 0 1px 0 rgba(255, 255, 255, 0.25);
+  --blur: 18px;
+  --saturate: 160%;
+  --color-bg: var(--bg-base);
+  --color-text: var(--text-1);
+  --color-border: var(--border);
+}
+
+:root[data-theme='minimal'] {
+  /* ===== Minimal 极简柔和（管理后台）===== */
+  --bg-base: var(--n-50);
+  --surface: var(--n-0);
+  --surface-strong: var(--n-0);
+  --border: rgba(16, 24, 40, 0.08);
+  --text-1: var(--n-900);
+  --text-2: var(--n-600);
+  --text-3: var(--n-400);
+  --brand: var(--c-blue-500);
+  --brand-grad: linear-gradient(135deg, #4f8cff, #7c5cff);
+  --shadow-1: 0 2px 8px rgba(16, 24, 40, 0.06);
+  --shadow-2: 0 8px 24px rgba(16, 24, 40, 0.08);
+  --shadow-3: 0 12px 32px rgba(16, 24, 40, 0.1);
+  --highlight: none;
+  --blur: 0px;
+  --color-bg: var(--bg-base);
+  --color-text: var(--text-1);
+  --color-border: var(--border);
+}
+
+:root[data-theme='aurora'] {
+  /* ===== Aurora 深色（数据大屏，无玻璃）===== */
+  --bg-base: #070b16;
+  --surface: rgba(255, 255, 255, 0.05);
+  --surface-strong: rgba(255, 255, 255, 0.1);
+  --border: rgba(255, 255, 255, 0.12);
+  --text-1: rgba(255, 255, 255, 0.95);
+  --text-2: rgba(255, 255, 255, 0.62);
+  --text-3: rgba(255, 255, 255, 0.4);
+  --brand: var(--c-blue-500);
+  --brand-grad: linear-gradient(135deg, #4f8cff, #7c5cff);
+  --shadow-1: 0 2px 8px rgba(0, 0, 0, 0.4);
+  --shadow-2: 0 10px 36px rgba(0, 0, 0, 0.5);
+  --shadow-3: 0 16px 48px rgba(0, 0, 0, 0.6);
+  --highlight: none;
+  --blur: 0px;
+  --color-bg: var(--bg-base);
+  --color-text: var(--text-1);
+  --color-border: var(--border);
+}

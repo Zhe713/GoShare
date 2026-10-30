@@ -1,0 +1,120 @@
+/**
+ * GoShare 设计体系 · reset + 排版基线
+ * 字体栈 / 字号阶梯 / 字重 / 行高 / 等宽数字 / 点击区基线
+ */
+*,
+*::before,
+*::after {
+  box-sizing: border-box;
+  margin: 0;
+  padding: 0;
+}
+
+html {
+  -webkit-text-size-adjust: 100%;
+}
+
+body {
+  font-family: -apple-system, 'PingFang SC', 'Microsoft YaHei', system-ui, sans-serif;
+  font-size: var(--fs-14);
+  font-weight: var(--fw-regular);
+  line-height: var(--lh-base);
+  color: var(--text-1);
+  background: var(--bg-base);
+  -webkit-font-smoothing: antialiased;
+}
+
+/* 标题：600 / 行高 1.25 */
+h1,
+h2,
+h3,
+h4 {
+  font-weight: var(--fw-semibold);
+  line-height: var(--lh-tight);
+}
+
+h1 {
+  font-size: var(--fs-32);
+}
+h2 {
+  font-size: var(--fs-24);
+}
+h3 {
+  font-size: var(--fs-20);
+}
+h4 {
+  font-size: var(--fs-16);
+}
+
+/* 数字：金额/倒计时/统计一律等宽 */
+.num,
+.money,
+.countdown,
+.stat {
+  font-variant-numeric: tabular-nums;
+}
+
+/* 链接与按钮继承 */
+a {
+  color: inherit;
+  text-decoration: none;
+}
+
+button {
+  font-family: inherit;
+  border: none;
+  background: none;
+  cursor: pointer;
+}
+
+input,
+textarea {
+  font-family: inherit;
+  border: none;
+  outline: none;
+  background: none;
+}
+
+ul,
+ol {
+  list-style: none;
+}
+
+img {
+  display: block;
+  max-width: 100%;
+}
+
+/* 点击区 ≥ 44px 的通用保障（组件内部各自负责） */
+button,
+[role='button'] {
+  min-height: 44px;
+}
+
+/* 移动端安全区 */
+.safe-bottom {
+  padding-bottom: env(safe-area-inset-bottom);
+}
+
+/* 尊重减弱动效偏好 */
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation-duration: 0.01ms !important;
+    transition-duration: 0.01ms !important;
+  }
+}
+
+/* 低端机降级：不支持 backdrop-filter 时玻璃浮层退化为半透明纯色（验收 18） */
+@supports not (backdrop-filter: blur(1px)) {
+  body {
+    background: var(--bg-base);
+  }
+  .g-card,
+  .g-btn--secondary,
+  .g-sheet__panel {
+    background: var(--surface-strong);
+    backdrop-filter: none;
+  }
+}
