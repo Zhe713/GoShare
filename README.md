@@ -81,6 +81,16 @@ mvn -pl go-share-user-server spring-boot:run
 - **分库分表（ShardingSphere-JDBC 5.5.0）**：订单表按乘客ID取模路由到 trip_order_0 / trip_order_1（同库分表演示），主键由分片引擎雪花算法生成，未分片表走默认数据源；更新必须携带分片键；老数据已迁移、原表改名 trip_order_legacy 兜底
 - 阶段 3 联调验证：Nacos 服务数 8、网关登录 / 伪造 token 401、限流拦截、ES 搜索（石家庄→北京命中、反向为空、日期过滤）、候补递补（满座登记 → 取消释放 → 自动补位 → 队列清空）、分片路由（乘客ID 2→表0 / 3→表1、雪花主键、跨片查询、支付后状态更新）
 
+### 阶段 4：RocketMQ 延时消息超时释放 + 消费防重复 + JMeter 压测 ✅（验收口径：不超卖 + 有压测报告）
+- **RocketMQ 延时消息超时释放（主链路）**：下单成功后发送 10 分钟延时消息（`GO_SHARE_ORDER` topic、Tag=`ORDER_TIMEOUT`、delayLevel=14 对应 10 分钟档，Keys 携带订单号），到期后消费者监听 Tag 过滤收到消息 → 调 `closeExpiredOrderByNo` 关单（状态 CREATED→EXPIRED + 分片表更新 + DB/Redis 双回补余座 + 退券 + 候补递补）
+- **消费防重复（两道防线）**：① Redis `setIfAbsent("order:timeout:consume:{orderNo}", 1h)` 消费幂等键；② `closeExpiredOrderByNo` 内订单非 CREATED 状态静默跳过（状态机防重复）
+- **定时扫描兜底**：12 分钟定时扫描（比延时消息晚 2 分钟）兜底关单，防止消息丢失或消费失败导致订单永久悬挂（与 MQ 消费共用同一个关闭函数）
+- **JMeter 压测（JMeter 5.6.3，非 GUI 模式）**：
+  - 场景A（不超卖）：50 线程并发直连订单服务 8003 抢 3 个座位 → 全部 HTTP 200，**DB 实际建单 3 单、余座 0、无超卖**（Redis Lua 原子扣减 + DB 条件更新 + 幂等键三重复防线）
+  - 场景B（网关限流）：100 线程并发走网关 8000 → **60 个 429（Too Many Requests）被 Sentinel 限流拒绝**，40 个放行（阈值 20qps/突发 40），放行请求进入业务层后仍受余座防线约束
+  - 压测脚本：`jmeter/jmeter-sceneA-nosellout.jmx`、`jmeter/jmeter-sceneB-gateway-limit.jmx`；完整结论见 `reports/阶段4压测报告.md`
+- 阶段 4 链路验证：下单 → MQ 延时消息发送（日志确认）→ 10 分钟后消费者消费 → 订单 EXPIRED + Redis 消费去重键 + 余座回补 3 → 兜底定时扫描（12 分钟）在消息路径异常时仍可关单（历史验证）
+
 ## 阶段 1 接口速查
 
 | 服务 | 接口 | 说明 |

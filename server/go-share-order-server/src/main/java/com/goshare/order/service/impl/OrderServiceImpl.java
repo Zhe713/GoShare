@@ -27,11 +27,11 @@ import org.springframework.http.HttpEntity;
 import org.springframework.http.HttpMethod;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
-import org.springframework.messaging.support.MessageBuilder;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
 import java.math.BigDecimal;
+import java.nio.charset.StandardCharsets;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.List;
@@ -273,8 +273,13 @@ public class OrderServiceImpl implements OrderService {
     private void sendTimeoutDelayMessage(String orderNo) {
         try {
             // delayLevel=14 对应 RocketMQ 4.9 延时档位 10 分钟（与 goshare.order.timeout-minutes 对齐）
-            rocketMQTemplate.syncSend("GO_SHARE_ORDER",
-                    MessageBuilder.withPayload(orderNo).build(), 3_000, 14);
+            // 必须设置 TAG=ORDER_TIMEOUT：消费者按 TAG 过滤订阅，不设 tag 的消息会被直接过滤丢弃。
+            // 注意：rocketmq-spring 的 Spring Message header（RocketMQHeaders.TAGS="TAGS"）经转换后
+            // Broker 侧 Tag 仍为 null（实测 Tags:[null]+CONSUMED_BUT_FILTERED），故改用原生 Message 直接设 Tag。
+            org.apache.rocketmq.common.message.Message msg = new org.apache.rocketmq.common.message.Message(
+                    "GO_SHARE_ORDER", "ORDER_TIMEOUT", orderNo, orderNo.getBytes(StandardCharsets.UTF_8));
+            msg.setDelayTimeLevel(14);
+            rocketMQTemplate.getProducer().send(msg, 3_000);
             log.info("已发送订单超时延时消息 orderNo={}", orderNo);
         } catch (Exception e) {
             // 发送失败不阻塞下单：定时扫描（releaseExpiredOrders）兜底关闭
