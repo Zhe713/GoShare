@@ -2,10 +2,11 @@
 /** 搜索页：A1 语义化搜索（口语 → 结构化回显 → 智能排序 + 解释层） */
 import { ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { GNavBar, GTripCard, GInput, GButton, GSkeleton, GEmpty } from '@/g-ui'
+import { GNavBar, GTabBar, GTripCard, GInput, GButton, GSkeleton, GEmpty } from '@/g-ui'
 import { semanticSearch, type SemanticSearchResult } from '@/api/trip'
 
 const router = useRouter()
+const tab = ref('search')
 const text = ref('')
 const result = ref<SemanticSearchResult | null>(null)
 const loading = ref(false)
@@ -78,6 +79,13 @@ async function doSearch() {
       action-text="看个例子"
       @action="text = '明天去北京'; doSearch()"
     />
+
+    <GTabBar v-model="tab" :tabs="[
+      { key: 'home', label: '首页', icon: 'home' },
+      { key: 'search', label: '搜索', icon: 'search' },
+      { key: 'coupons', label: '券包', icon: 'coupons' },
+      { key: 'mine', label: '我的', icon: 'mine' },
+    ]" />
   </div>
 </template>
 

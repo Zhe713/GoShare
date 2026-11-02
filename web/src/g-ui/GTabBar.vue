@@ -1,5 +1,6 @@
 <script setup lang="ts">
-/** GTabBar：高 56 + 安全区；选中态图标与文字同步变色；图标为内置线性 SVG（同一描边体系） */
+/** GTabBar：高 56 + 安全区；选中态图标与文字同步变色；图标为内置线性 SVG（同一描边体系）；点击跳转对应路由 */
+import { useRouter } from 'vue-router'
 withDefaults(
   defineProps<{
     modelValue?: string
@@ -9,6 +10,13 @@ withDefaults(
 )
 
 const emit = defineEmits<{ 'update:modelValue': [v: string] }>()
+const router = useRouter()
+
+function go(key: string) {
+  emit('update:modelValue', key)
+  const path = key === 'home' ? '/' : `/${key}`
+  if (router.currentRoute.value.path !== path) router.push(path)
+}
 
 /** 统一线性图标（stroke=currentColor，视觉重心一致，24×24 视窗） */
 const ICONS: Record<string, string> = {
@@ -26,7 +34,7 @@ const ICONS: Record<string, string> = {
       :key="t.key"
       class="g-tabbar__item"
       :class="{ 'g-tabbar__item--active': modelValue === t.key }"
-      @click="emit('update:modelValue', t.key)"
+      @click="go(t.key)"
     >
       <svg class="g-tabbar__icon" viewBox="0 0 24 24" width="22" height="22" fill="none" stroke="currentColor" stroke-width="1.8" stroke-linecap="round" stroke-linejoin="round" aria-hidden="true">
         <path :d="ICONS[t.icon] || t.icon" />
