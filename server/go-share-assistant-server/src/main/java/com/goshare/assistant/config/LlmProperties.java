@@ -21,6 +21,12 @@ public class LlmProperties {
     /** 模型 API Key */
     private String apiKey;
 
+    /** 小模型档（规则意图/轻量问答，默认 qwen-plus） */
+    private String model = "qwen-plus";
+
+    /** 大模型档（生成类，默认 qwen-max） */
+    private String modelLarge = "qwen-max";
+
     /** 数据版本号：行程价格/余座/券规则变化时 +1，旧答案缓存自动作废 */
     private int dataVersion = 1;
 
