@@ -108,18 +108,22 @@ async function doLogin() {
   min-height: 100vh;
   padding: 0 var(--sp-2) 56px;
 }
+
 .mine__card {
   margin: var(--sp-2) 0;
 }
+
 .mine__name {
   font-size: var(--fs-20);
   font-weight: var(--fw-semibold);
 }
+
 .mine__role {
   margin-top: 4px;
   font-size: var(--fs-13);
   color: var(--text-2);
 }
+
 .mine__menu {
   background: var(--surface);
   border: 1px solid var(--border);
@@ -127,6 +131,7 @@ async function doLogin() {
   box-shadow: var(--shadow-1), var(--highlight);
   overflow: hidden;
 }
+
 .mine__item {
   display: flex;
   align-items: center;
@@ -137,17 +142,21 @@ async function doLogin() {
   font-size: var(--fs-14);
   cursor: pointer;
 }
+
 .mine__item:last-child {
   border-bottom: none;
 }
+
 .mine__arrow {
   color: var(--text-3);
   font-size: var(--fs-20);
 }
+
 .mine__section {
   margin: var(--sp-3) 0 var(--sp-2);
   font-size: var(--fs-16);
 }
+
 .mine__order {
   display: flex;
   justify-content: space-between;
@@ -155,18 +164,23 @@ async function doLogin() {
   margin-bottom: var(--sp-1);
   cursor: pointer;
 }
+
 .mine__order-status {
   font-size: var(--fs-12);
 }
+
 .mine__order-status--PAID {
   color: var(--c-green-500);
 }
+
 .mine__order-status--CREATED {
   color: var(--c-orange-500);
 }
+
 .mine__order-status--CANCELLED {
   color: var(--text-3);
 }
+
 /* 登录抽屉（复用 GSheet 视觉） */
 .mine__login-mask {
   position: fixed;
@@ -174,6 +188,7 @@ async function doLogin() {
   z-index: 100;
   background: rgba(0, 0, 0, 0.45);
 }
+
 .mine__login {
   position: fixed;
   left: 0;
@@ -188,6 +203,7 @@ async function doLogin() {
   border-radius: var(--r-xl) var(--r-xl) 0 0;
   box-shadow: var(--shadow-3);
 }
+
 .mine__login-title {
   font-size: var(--fs-20);
   font-weight: var(--fw-semibold);

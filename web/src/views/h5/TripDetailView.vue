@@ -101,28 +101,34 @@ async function confirmOrder() {
   min-height: 100vh;
   padding-bottom: 90px;
 }
+
 .detail__card {
   margin: var(--sp-2);
 }
+
 .detail__route {
   display: flex;
   align-items: center;
   justify-content: space-between;
 }
+
 .detail__city-name {
   font-size: var(--fs-24);
   font-weight: var(--fw-semibold);
 }
+
 .detail__city-tag {
   font-size: var(--fs-12);
   color: var(--text-3);
 }
+
 .detail__line {
   flex: 1;
   margin: 0 var(--sp-2);
   border-top: 2px dashed var(--border);
   position: relative;
 }
+
 .detail__line::after {
   content: '→';
   position: absolute;
@@ -130,6 +136,7 @@ async function confirmOrder() {
   top: -14px;
   color: var(--text-3);
 }
+
 .detail__meta {
   display: flex;
   gap: var(--sp-2);
@@ -137,23 +144,28 @@ async function confirmOrder() {
   font-size: var(--fs-13);
   color: var(--text-2);
 }
+
 .detail__price {
   margin-left: auto;
   color: var(--c-orange-500);
 }
+
 .detail__price b {
   font-size: var(--fs-20);
 }
+
 .detail__remark {
   margin-top: var(--sp-1);
   font-size: var(--fs-13);
   color: var(--text-2);
 }
+
 .detail__seats {
   display: flex;
   align-items: center;
   gap: var(--sp-2);
 }
+
 .detail__seat {
   min-width: 44px;
   height: 44px;
@@ -163,19 +175,23 @@ async function confirmOrder() {
   color: var(--text-1);
   font-size: var(--fs-16);
 }
+
 .detail__seat--on {
   background: var(--brand-grad);
   color: var(--on-brand);
   border-color: transparent;
 }
+
 .detail__total {
   margin-top: var(--sp-2);
   font-size: var(--fs-16);
 }
+
 .detail__total b {
   font-size: var(--fs-24);
   color: var(--c-orange-500);
 }
+
 .detail__footer {
   position: fixed;
   left: 0;

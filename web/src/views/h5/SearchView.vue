@@ -87,15 +87,18 @@ async function doSearch() {
   min-height: 100vh;
   padding-bottom: var(--sp-4);
 }
+
 .search__input {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
   padding: var(--sp-2);
 }
+
 .search__result {
   padding: 0 var(--sp-2);
 }
+
 .search__parsed {
   padding: var(--sp-2);
   background: var(--surface);
@@ -103,29 +106,34 @@ async function doSearch() {
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-1), var(--highlight);
 }
+
 .search__label {
   font-size: var(--fs-12);
   color: var(--text-3);
 }
+
 .search__parsed-text {
   margin-top: 2px;
   font-size: var(--fs-16);
   font-weight: var(--fw-medium);
   color: var(--brand);
 }
+
 .search__explain {
   margin: var(--sp-2) 0;
   font-size: var(--fs-13);
   color: var(--text-2);
   line-height: var(--lh-base);
 }
+
 .search__list {
   display: flex;
   flex-direction: column;
   gap: var(--sp-2);
 }
+
 .search__reasons {
-  margin-top: -var(--sp-1);
+  margin-top: calc(-1 * var(--sp-1));
   padding: 0 var(--sp-2);
   font-size: var(--fs-12);
   color: var(--text-3);

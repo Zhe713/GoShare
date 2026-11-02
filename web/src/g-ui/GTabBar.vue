@@ -49,6 +49,7 @@ const ICONS: Record<string, string> = {
   backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
   border-top: 1px solid var(--border);
 }
+
 .g-tabbar__item {
   flex: 1;
   display: flex;
@@ -59,12 +60,15 @@ const ICONS: Record<string, string> = {
   color: var(--text-3);
   transition: color var(--dur-fast);
 }
+
 .g-tabbar__icon {
   line-height: 1;
 }
+
 .g-tabbar__label {
   font-size: var(--fs-12);
 }
+
 .g-tabbar__item--active {
   color: var(--brand);
   font-weight: var(--fw-medium);

@@ -74,8 +74,9 @@ onMounted(load)
 .home {
   position: relative;
   min-height: 100vh;
-  padding-bottom: 56px;
+  padding-bottom: var(--tabbar-h);
 }
+
 .home__search {
   display: flex;
   align-items: center;
@@ -90,10 +91,12 @@ onMounted(load)
   backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
   cursor: pointer;
 }
+
 .home__search-text {
   color: var(--text-2);
   font-size: var(--fs-14);
 }
+
 .home__ai {
   display: flex;
   align-items: center;
@@ -105,23 +108,28 @@ onMounted(load)
   box-shadow: var(--shadow-2);
   cursor: pointer;
 }
+
 .home__ai-title {
   font-size: var(--fs-16);
   font-weight: var(--fw-semibold);
 }
+
 .home__ai-sub {
   margin-top: 2px;
   font-size: var(--fs-12);
   opacity: 0.85;
 }
+
 .home__ai-arrow {
   margin-left: auto;
   font-size: var(--fs-24);
 }
+
 .home__section {
   margin: 0 var(--sp-2) var(--sp-2);
   font-size: var(--fs-16);
 }
+
 .home__list {
   display: flex;
   flex-direction: column;

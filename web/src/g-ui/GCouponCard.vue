@@ -55,6 +55,7 @@ const statusText = computed(() => (status.value === 'used' ? '已使用' : statu
   overflow: hidden;
   transition: opacity var(--dur-base);
 }
+
 .g-coupon__amount {
   display: flex;
   flex-direction: column;
@@ -65,18 +66,22 @@ const statusText = computed(() => (status.value === 'used' ? '已使用' : statu
   background: var(--brand-grad);
   color: var(--on-brand);
 }
+
 .g-coupon__sym {
   font-size: var(--fs-14);
 }
+
 .g-coupon__num {
   font-size: var(--fs-32);
   font-weight: var(--fw-semibold);
   line-height: 1.1;
 }
+
 .g-coupon__cond {
   font-size: var(--fs-12);
   opacity: 0.9;
 }
+
 /* 虚线撕口：两端圆点 + 中线虚线 */
 .g-coupon__perf {
   position: relative;
@@ -84,6 +89,7 @@ const statusText = computed(() => (status.value === 'used' ? '已使用' : statu
   border-left: 1px dashed var(--border);
   margin: 0 var(--sp-2);
 }
+
 .g-coupon__perf::before,
 .g-coupon__perf::after {
   content: '';
@@ -95,12 +101,15 @@ const statusText = computed(() => (status.value === 'used' ? '已使用' : statu
   background: var(--bg-base);
   border: 1px solid var(--border);
 }
+
 .g-coupon__perf::before {
   top: -7px;
 }
+
 .g-coupon__perf::after {
   bottom: -7px;
 }
+
 .g-coupon__info {
   flex: 1;
   display: flex;
@@ -109,6 +118,7 @@ const statusText = computed(() => (status.value === 'used' ? '已使用' : statu
   gap: 2px;
   padding: var(--sp-2) 0;
 }
+
 .g-coupon__name {
   font-size: var(--fs-16);
   font-weight: var(--fw-semibold);
@@ -117,11 +127,13 @@ const statusText = computed(() => (status.value === 'used' ? '已使用' : statu
   overflow: hidden;
   text-overflow: ellipsis;
 }
+
 .g-coupon__desc,
 .g-coupon__expire {
   font-size: var(--fs-12);
   color: var(--text-3);
 }
+
 .g-coupon__action {
   align-self: center;
   margin-right: var(--sp-2);
@@ -132,24 +144,30 @@ const statusText = computed(() => (status.value === 'used' ? '已使用' : statu
   border-radius: var(--r-sm);
   font-size: var(--fs-13);
 }
+
 /* 三态 */
 .g-coupon--claimed .g-coupon__amount {
   background: color-mix(in srgb, var(--c-blue-500) 55%, var(--surface));
 }
+
 .g-coupon--claimed .g-coupon__action {
   color: var(--brand);
   background: color-mix(in srgb, var(--brand) 12%, transparent);
 }
+
 .g-coupon--used {
   opacity: 0.6;
 }
+
 .g-coupon--used .g-coupon__amount {
   background: var(--surface-strong);
   color: var(--text-3);
 }
+
 .g-coupon--used .g-coupon__action {
   display: none;
 }
+
 /* 已用印章 */
 .g-coupon__stamp {
   position: absolute;

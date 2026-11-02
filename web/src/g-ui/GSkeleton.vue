@@ -28,15 +28,18 @@ withDefaults(
   flex-direction: column;
   gap: var(--sp-1);
 }
+
 .g-skeleton__row {
   border-radius: var(--r-sm);
   background: var(--surface);
   position: relative;
   overflow: hidden;
 }
+
 .g-skeleton__row--short {
   width: 60%;
 }
+
 /* 微光扫过 1.6s 循环（唯一允许的循环动画） */
 .g-skeleton__row::after {
   content: '';
@@ -51,6 +54,7 @@ withDefaults(
   transform: translateX(-100%);
   animation: g-skeleton-shine 1.6s linear infinite;
 }
+
 @keyframes g-skeleton-shine {
   100% {
     transform: translateX(100%);

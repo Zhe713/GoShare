@@ -58,30 +58,37 @@ const hot = computed(() => (ratio.value <= 0.33 ? '热' : ratio.value <= 0.66 ? 
   cursor: pointer;
   transition: transform var(--dur-fast) var(--ease-out-expo), border-color var(--dur-fast);
 }
+
 .g-trip-card:active {
   transform: scale(0.98);
 }
+
 .g-trip-card--active {
   border-color: var(--brand);
 }
+
 .g-trip-card__route {
   display: flex;
   align-items: baseline;
   gap: var(--sp-1);
 }
+
 .g-trip-card__city {
   font-size: var(--fs-20);
   font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
+
 .g-trip-card__arrow {
   color: var(--text-3);
 }
+
 .g-trip-card__time {
   margin-left: auto;
   font-size: var(--fs-14);
   color: var(--text-2);
 }
+
 .g-trip-card__meta {
   display: flex;
   align-items: center;
@@ -90,43 +97,52 @@ const hot = computed(() => (ratio.value <= 0.33 ? '热' : ratio.value <= 0.66 ? 
   font-size: var(--fs-13);
   color: var(--text-2);
 }
+
 .g-trip-card__price {
   color: var(--c-orange-500);
 }
+
 .g-trip-card__price b {
   font-size: var(--fs-20);
 }
+
 .g-trip-card__seats {
   padding: 2px var(--sp-1);
   border-radius: var(--r-sm);
   font-size: var(--fs-12);
 }
+
 .g-trip-card__seats--热 {
   color: var(--c-red-500);
   background: color-mix(in srgb, var(--c-red-500) 14%, transparent);
 }
+
 .g-trip-card__seats--中 {
   color: var(--c-orange-500);
   background: color-mix(in srgb, var(--c-orange-500) 14%, transparent);
 }
+
 .g-trip-card__seats--冷 {
   color: var(--c-green-500);
   background: color-mix(in srgb, var(--c-green-500) 14%, transparent);
 }
+
 .g-trip-card__trust {
   margin-left: auto;
   color: var(--text-3);
 }
+
 .g-trip-card__bar {
   height: 3px;
   margin-top: var(--sp-1);
-  border-radius: 2px;
+  border-radius: var(--r-xs);
   background: var(--surface-strong);
   overflow: hidden;
 }
+
 .g-trip-card__bar-inner {
   height: 100%;
-  border-radius: 2px;
+  border-radius: var(--r-xs);
   background: var(--brand-grad);
   transition: width var(--dur-base);
 }

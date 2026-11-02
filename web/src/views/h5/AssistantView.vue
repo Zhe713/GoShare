@@ -74,16 +74,19 @@ async function send() {
   position: relative;
   min-height: 100vh;
 }
+
 .assistant__list {
   padding: var(--sp-2);
   overflow-y: auto;
   height: calc(100vh - 44px - 76px);
 }
+
 .assistant__meta {
-  margin: -var(--sp-1) 0 var(--sp-2) 12%;
+  margin: calc(-1 * var(--sp-1)) 0 var(--sp-2) 12%;
   font-size: var(--fs-12);
   color: var(--text-3);
 }
+
 .assistant__input {
   position: fixed;
   left: 0;
@@ -96,6 +99,7 @@ async function send() {
   backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
   border-top: 1px solid var(--border);
 }
+
 .assistant__input .g-input {
   flex: 1;
 }

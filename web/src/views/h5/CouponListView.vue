@@ -81,12 +81,14 @@ async function claim(templateId: number) {
 .coupons {
   position: relative;
   min-height: 100vh;
-  padding-bottom: 56px;
+  padding-bottom: var(--tabbar-h);
 }
+
 .coupons__section {
   margin: var(--sp-3) var(--sp-2) var(--sp-2);
   font-size: var(--fs-16);
 }
+
 .coupons__list {
   display: flex;
   flex-direction: column;

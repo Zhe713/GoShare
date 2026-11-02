@@ -11,7 +11,7 @@
 }
 
 html {
-  -webkit-text-size-adjust: 100%;
+  text-size-adjust: 100%;
 }
 
 body {
@@ -36,12 +36,15 @@ h4 {
 h1 {
   font-size: var(--fs-32);
 }
+
 h2 {
   font-size: var(--fs-24);
 }
+
 h3 {
   font-size: var(--fs-20);
 }
+
 h4 {
   font-size: var(--fs-16);
 }
@@ -111,6 +114,7 @@ button,
   body {
     background: var(--bg-base);
   }
+
   .g-card,
   .g-btn--secondary,
   .g-sheet__panel {

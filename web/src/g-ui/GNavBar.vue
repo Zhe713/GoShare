@@ -33,6 +33,7 @@ const emit = defineEmits<{ back: [] }>()
   backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
   border-bottom: 1px solid var(--border);
 }
+
 .g-navbar__inner {
   position: relative;
   display: flex;
@@ -40,6 +41,7 @@ const emit = defineEmits<{ back: [] }>()
   height: 100%;
   padding: 0 var(--sp-2);
 }
+
 .g-navbar__back {
   position: absolute;
   left: var(--sp-1);
@@ -51,13 +53,15 @@ const emit = defineEmits<{ back: [] }>()
   height: 44px;
   color: var(--text-1);
 }
+
 .g-navbar__arrow {
   width: 10px;
   height: 10px;
-  border-left: 2px solid currentColor;
-  border-bottom: 2px solid currentColor;
+  border-left: 2px solid currentcolor;
+  border-bottom: 2px solid currentcolor;
   transform: rotate(45deg);
 }
+
 .g-navbar__title {
   flex: 1;
   text-align: center;
@@ -65,6 +69,7 @@ const emit = defineEmits<{ back: [] }>()
   font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
+
 .g-navbar__slot {
   margin-left: auto;
 }

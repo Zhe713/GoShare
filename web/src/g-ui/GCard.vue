@@ -22,12 +22,15 @@ withDefaults(
   box-shadow: var(--shadow-1), var(--highlight);
   backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
 }
+
 .g-card--regular {
   padding: var(--sp-2);
 }
+
 .g-card--compact {
   padding: var(--sp-1);
 }
+
 .g-card--none {
   padding: 0;
 }

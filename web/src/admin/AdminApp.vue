@@ -119,16 +119,19 @@ async function testAi() {
   min-height: 100vh;
   background: var(--bg-base);
 }
+
 .admin__side {
   width: 200px;
   padding: var(--sp-3) var(--sp-2);
   background: var(--surface);
   border-right: 1px solid var(--border);
 }
+
 .admin__logo {
   font-size: var(--fs-20);
   margin-bottom: var(--sp-4);
 }
+
 .admin__nav {
   display: block;
   width: 100%;
@@ -140,56 +143,67 @@ async function testAi() {
   font-size: var(--fs-14);
   margin-bottom: var(--sp-1);
 }
+
 .admin__nav--on {
   background: color-mix(in srgb, var(--brand) 12%, transparent);
   color: var(--brand);
   font-weight: var(--fw-medium);
 }
+
 .admin__main {
   flex: 1;
   padding: var(--sp-3);
 }
+
 .admin__stats {
   display: grid;
   grid-template-columns: repeat(3, 1fr);
   gap: var(--sp-2);
   margin-bottom: var(--sp-3);
 }
+
 .admin__stat-label {
   font-size: var(--fs-13);
   color: var(--text-2);
 }
+
 .admin__stat-num {
   margin-top: var(--sp-1);
   font-size: var(--fs-32);
   font-weight: var(--fw-semibold);
   color: var(--text-1);
 }
+
 .admin__table {
   padding: 0;
   overflow: hidden;
 }
+
 .admin__table :deep(table) {
   width: 100%;
   border-collapse: collapse;
   font-size: var(--fs-14);
 }
+
 .admin__table :deep(th),
 .admin__table :deep(td) {
   text-align: left;
   padding: var(--sp-2);
   border-bottom: 1px solid var(--border);
 }
+
 .admin__table :deep(th) {
   color: var(--text-3);
   font-weight: var(--fw-medium);
   font-size: var(--fs-13);
 }
+
 .admin__ai h3,
 .admin__help h3 {
   font-size: var(--fs-16);
   margin-bottom: var(--sp-2);
 }
+
 .admin__input {
   width: 100%;
   padding: var(--sp-2);
@@ -200,6 +214,7 @@ async function testAi() {
   font-size: var(--fs-14);
   resize: vertical;
 }
+
 .admin__send {
   margin-top: var(--sp-2);
   min-height: 44px;
@@ -209,6 +224,7 @@ async function testAi() {
   border-radius: var(--r-md);
   font-size: var(--fs-14);
 }
+
 .admin__ai-result {
   margin-top: var(--sp-2);
   padding: var(--sp-2);
@@ -218,6 +234,7 @@ async function testAi() {
   color: var(--text-1);
   white-space: pre-wrap;
 }
+
 .admin__help p {
   margin-top: var(--sp-1);
   font-size: var(--fs-14);

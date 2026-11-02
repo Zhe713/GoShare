@@ -89,23 +89,29 @@ async function doCancel() {
   min-height: 100vh;
   padding: 0 var(--sp-2);
 }
+
 .order__card {
   margin: var(--sp-2) 0;
 }
+
 .order__status {
   font-size: var(--fs-20);
   font-weight: var(--fw-semibold);
   margin-bottom: var(--sp-2);
 }
+
 .order__status--PAID {
   color: var(--c-green-500);
 }
+
 .order__status--CREATED {
   color: var(--c-orange-500);
 }
+
 .order__status--CANCELLED {
   color: var(--text-3);
 }
+
 .order__row {
   display: flex;
   justify-content: space-between;
@@ -113,10 +119,12 @@ async function doCancel() {
   font-size: var(--fs-14);
   color: var(--text-2);
 }
+
 .order__money {
   color: var(--c-orange-500);
   font-weight: var(--fw-medium);
 }
+
 .order__actions {
   margin-top: var(--sp-3);
 }

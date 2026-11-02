@@ -34,10 +34,12 @@ const emit = defineEmits<{ action: [] }>()
   padding: var(--sp-4) var(--sp-2);
   text-align: center;
 }
+
 .g-empty__text {
   font-size: var(--fs-14);
   color: var(--text-2);
 }
+
 .g-empty__action {
   min-height: 44px;
   padding: 0 var(--sp-3);
@@ -47,6 +49,7 @@ const emit = defineEmits<{ action: [] }>()
   font-size: var(--fs-14);
   box-shadow: var(--shadow-1);
 }
+
 .g-empty__action:active {
   transform: scale(0.97);
   transition: transform var(--dur-fast) var(--ease-out-expo);

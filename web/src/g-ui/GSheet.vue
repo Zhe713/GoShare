@@ -29,11 +29,13 @@ const emit = defineEmits<{ 'update:modelValue': [v: boolean] }>()
   inset: 0;
   z-index: 100;
 }
+
 .g-sheet__mask {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
 }
+
 .g-sheet__panel {
   position: absolute;
   left: 0;
@@ -44,19 +46,22 @@ const emit = defineEmits<{ 'update:modelValue': [v: boolean] }>()
   box-shadow: var(--shadow-3);
   padding: var(--sp-1) var(--sp-2) var(--sp-3);
 }
+
 .g-sheet__handle {
   width: 40px;
   height: 4px;
   margin: var(--sp-1) auto;
-  border-radius: 2px;
+  border-radius: var(--r-xs);
   background: var(--text-3);
 }
+
 .g-sheet__title {
   font-size: var(--fs-16);
   font-weight: var(--fw-semibold);
   text-align: center;
   margin-bottom: var(--sp-2);
 }
+
 .g-sheet__body {
   max-height: 60vh;
   overflow-y: auto;
@@ -67,14 +72,17 @@ const emit = defineEmits<{ 'update:modelValue': [v: boolean] }>()
 .g-sheet-leave-active {
   transition: opacity var(--dur-base);
 }
+
 .g-sheet-enter-active .g-sheet__panel,
 .g-sheet-leave-active .g-sheet__panel {
   transition: transform 320ms var(--ease-out-expo);
 }
+
 .g-sheet-enter-from,
 .g-sheet-leave-to {
   opacity: 0;
 }
+
 .g-sheet-enter-from .g-sheet__panel,
 .g-sheet-leave-to .g-sheet__panel {
   transform: translateY(100%);

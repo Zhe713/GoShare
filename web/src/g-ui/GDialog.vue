@@ -51,11 +51,13 @@ function ok() {
   align-items: center;
   justify-content: center;
 }
+
 .g-dialog__mask {
   position: absolute;
   inset: 0;
   background: rgba(0, 0, 0, 0.45);
 }
+
 .g-dialog__box {
   position: relative;
   width: 80%;
@@ -64,11 +66,13 @@ function ok() {
   box-shadow: var(--shadow-3);
   padding: var(--sp-3) var(--sp-2) var(--sp-2);
 }
+
 .g-dialog__title {
   font-size: var(--fs-16);
   font-weight: var(--fw-semibold);
   text-align: center;
 }
+
 .g-dialog__msg {
   margin-top: var(--sp-1);
   font-size: var(--fs-14);
@@ -76,44 +80,53 @@ function ok() {
   text-align: center;
   line-height: var(--lh-base);
 }
+
 .g-dialog__actions {
   display: flex;
   gap: var(--sp-1);
   margin-top: var(--sp-3);
 }
+
 /* 移动端按钮上下排列 */
-@media (max-width: 430px) {
+@media (width <= 430px) {
   .g-dialog__actions {
     flex-direction: column;
   }
 }
+
 .g-dialog__btn {
   flex: 1;
   min-height: 44px;
   border-radius: var(--r-md);
   font-size: var(--fs-16);
 }
+
 .g-dialog__btn--cancel {
   color: var(--text-1);
   background: var(--surface);
   border: 1px solid var(--border);
 }
+
 .g-dialog__btn--confirm {
   color: var(--on-brand);
   background: var(--brand-grad);
 }
+
 .g-dialog-enter-active,
 .g-dialog-leave-active {
   transition: opacity var(--dur-base);
 }
+
 .g-dialog-enter-active .g-dialog__box,
 .g-dialog-leave-active .g-dialog__box {
   transition: transform var(--dur-base) var(--ease-out-expo);
 }
+
 .g-dialog-enter-from,
 .g-dialog-leave-to {
   opacity: 0;
 }
+
 .g-dialog-enter-from .g-dialog__box,
 .g-dialog-leave-to .g-dialog__box {
   transform: scale(0.96);

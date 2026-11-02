@@ -141,28 +141,33 @@ onMounted(async () => {
   padding: var(--sp-3);
   background: var(--bg-base);
 }
+
 .screen__head {
   text-align: center;
   padding: var(--sp-3) 0;
 }
+
 .screen__head h1 {
   font-size: var(--fs-24);
   letter-spacing: 2px;
   background: var(--brand-grad);
-  -webkit-background-clip: text;
+  background-clip: text;
   background-clip: text;
   color: transparent;
 }
+
 .screen__sub {
   margin-top: var(--sp-1);
   font-size: var(--fs-13);
   color: var(--text-2);
 }
+
 .screen__grid {
   display: grid;
   grid-template-columns: repeat(2, 1fr);
   gap: var(--sp-2);
 }
+
 .screen__card {
   padding: var(--sp-2);
   background: var(--surface);
@@ -170,27 +175,32 @@ onMounted(async () => {
   border-radius: var(--r-lg);
   box-shadow: var(--shadow-2);
 }
+
 .screen__card h3 {
   font-size: var(--fs-14);
   color: var(--text-2);
   margin-bottom: var(--sp-2);
 }
+
 .screen__chart {
   height: 220px;
 }
+
 .screen__big {
   font-size: var(--fs-32);
   font-weight: var(--fw-semibold);
   color: var(--c-green-500);
   text-align: center;
 }
+
 .screen__tip {
   margin-top: var(--sp-1);
   font-size: var(--fs-12);
   color: var(--text-3);
   text-align: center;
 }
-@media (max-width: 800px) {
+
+@media (width <= 800px) {
   .screen__grid {
     grid-template-columns: 1fr;
   }

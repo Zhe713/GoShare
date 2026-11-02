@@ -31,10 +31,12 @@ const emit = defineEmits<{ retry: [] }>()
   padding: var(--sp-4) var(--sp-2);
   text-align: center;
 }
+
 .g-error__msg {
   font-size: var(--fs-14);
   color: var(--text-2);
 }
+
 .g-error__retry {
   min-height: 44px;
   padding: 0 var(--sp-3);
@@ -45,6 +47,7 @@ const emit = defineEmits<{ retry: [] }>()
   font-size: var(--fs-14);
   box-shadow: var(--shadow-1);
 }
+
 .g-error__retry:active {
   transform: scale(0.97);
   transition: transform var(--dur-fast) var(--ease-out-expo);

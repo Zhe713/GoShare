@@ -90,32 +90,39 @@ async function pay() {
   min-height: 100vh;
   padding-bottom: 90px;
 }
+
 .pay__card {
   margin: var(--sp-2);
 }
+
 .pay__label {
   font-size: var(--fs-13);
   color: var(--text-3);
 }
+
 .pay__amount {
   margin-top: var(--sp-1);
   font-size: var(--fs-16);
   color: var(--text-1);
 }
+
 .pay__amount b {
   font-size: var(--fs-32);
   color: var(--c-orange-500);
 }
+
 .pay__countdown {
   margin-top: var(--sp-1);
   font-size: var(--fs-13);
   color: var(--text-2);
 }
+
 .pay__no {
   margin-top: var(--sp-1);
   font-size: var(--fs-12);
   color: var(--text-3);
 }
+
 .pay__row {
   display: flex;
   justify-content: space-between;
@@ -123,6 +130,7 @@ async function pay() {
   font-size: var(--fs-14);
   color: var(--text-1);
 }
+
 .pay__footer {
   position: fixed;
   left: 0;
@@ -133,6 +141,7 @@ async function pay() {
   backdrop-filter: blur(var(--blur)) saturate(var(--saturate));
   border-top: 1px solid var(--border);
 }
+
 .pay__done {
   margin-top: var(--sp-2);
   text-align: center;

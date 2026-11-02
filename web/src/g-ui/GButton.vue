@@ -52,21 +52,25 @@ function onClick(e: MouseEvent) {
   user-select: none;
   -webkit-tap-highlight-color: transparent;
 }
+
 .g-btn:not(:disabled):active {
   transform: scale(0.97);
 }
+
 .g-btn--block {
   display: flex;
   width: 100%;
 }
+
 .g-btn__spinner {
   width: 16px;
   height: 16px;
-  border: 2px solid currentColor;
+  border: 2px solid currentcolor;
   border-top-color: transparent;
   border-radius: 50%;
   animation: g-btn-spin 0.8s linear infinite;
 }
+
 @keyframes g-btn-spin {
   to {
     transform: rotate(360deg);
@@ -79,6 +83,7 @@ function onClick(e: MouseEvent) {
   background: var(--brand-grad);
   box-shadow: var(--shadow-1);
 }
+
 .g-btn--primary:not(:disabled):active {
   background: linear-gradient(135deg, var(--c-blue-600), var(--c-violet-500));
 }
@@ -104,6 +109,7 @@ function onClick(e: MouseEvent) {
   cursor: not-allowed;
   pointer-events: none;
 }
+
 /* 加载态 */
 .g-btn--loading {
   opacity: 0.7;

@@ -14,6 +14,7 @@ import { RouterView } from 'vue-router'
   min-height: 100vh;
   background: var(--bg-base);
 }
+
 /* Glass 主题双光斑背景（单屏 ≤3 层） */
 .h5-app::before {
   content: '';
@@ -27,6 +28,7 @@ import { RouterView } from 'vue-router'
   pointer-events: none;
   z-index: 0;
 }
+
 .h5-app::after {
   content: '';
   position: fixed;

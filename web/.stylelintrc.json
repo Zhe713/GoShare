@@ -1,0 +1,32 @@
+{
+  "extends": ["stylelint-config-standard", "stylelint-config-standard-vue"],
+  "rules": {
+    "color-named": "never",
+    "color-hex-length": null,
+    "color-function-alias-notation": null,
+    "custom-property-pattern": null,
+    "color-function-notation": null,
+    "alpha-value-notation": null,
+    "declaration-block-no-redundant-longhand-properties": null,
+    "declaration-block-no-duplicate-properties": [true, { "ignore": ["consecutive-duplicates"] }],
+    "no-descending-specificity": null,
+    "selector-class-pattern": null,
+    "keyframes-name-pattern": null,
+    "custom-media-pattern": null,
+    "no-duplicate-selectors": null,
+    "declaration-property-value-disallowed-list": {
+      "/^(color|background-color|border-color|outline-color|fill|stroke)$/": [
+        "/^#[0-9a-fA-F]{3,8}$/",
+        "/^rgba?\\(/",
+        "/^hsla?\\(/",
+        "/^(red|blue|green|white|black|gray|grey|orange|purple|violet|pink)$/"
+      ],
+      "border-radius": ["/^\\d+(\\.\\d+)?px$/"],
+      "font-size": ["/^\\d+(\\.\\d+)?px$/"],
+      "box-shadow": ["/^\\d+px\\s+\\d+px\\s+\\d+px/"],
+      "/^(margin|margin-top|margin-bottom|margin-left|margin-right|padding|padding-top|padding-bottom|padding-left|padding-right|gap)$/": [
+        "/^(8|12|16|20|24|32|40|48|56|64|80)(px)$/"
+      ]
+    }
+  }
+}

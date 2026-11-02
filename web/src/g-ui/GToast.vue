@@ -65,14 +65,17 @@ watch(
   color: var(--text-1);
   font-size: var(--fs-14);
 }
+
 .g-toast__icon {
   color: var(--c-green-500);
   font-weight: var(--fw-semibold);
 }
+
 .g-toast-enter-active,
 .g-toast-leave-active {
   transition: opacity var(--dur-fast), transform var(--dur-fast);
 }
+
 .g-toast-enter-from,
 .g-toast-leave-to {
   opacity: 0;

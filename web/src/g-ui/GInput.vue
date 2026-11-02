@@ -59,10 +59,12 @@ function onInput(e: Event) {
   flex-direction: column;
   gap: var(--sp-1);
 }
+
 .g-input__label {
   font-size: var(--fs-13);
   color: var(--text-2);
 }
+
 .g-input {
   display: flex;
   align-items: center;
@@ -73,30 +75,37 @@ function onInput(e: Event) {
   border-radius: var(--r-md);
   transition: border-color var(--dur-fast);
 }
+
 .g-input--large {
   height: 48px;
 }
+
 .g-input input {
   flex: 1;
   font-size: var(--fs-16);
   color: var(--text-1);
   background: none;
 }
+
 .g-input input::placeholder {
   color: var(--text-3);
 }
+
 /* 聚焦：2px 品牌描边（非发光） */
 .g-input--focus {
   border: 2px solid var(--brand);
   padding: 0 calc(var(--sp-2) - 1px);
 }
+
 .g-input--error {
   border-color: var(--c-red-500);
 }
+
 .g-input--disabled {
   opacity: 0.45;
   pointer-events: none;
 }
+
 .g-input__error {
   font-size: var(--fs-12);
   color: var(--c-red-500);
