@@ -1,5 +1,5 @@
 <script setup lang="ts">
-/** GCouponCard：左金额区 + 右信息区 + 虚线撕口；三态：可领/已领/已用（灰化+印章） */
+/** GCouponCard：左金额区 + 右信息区 + 虚线撕口；四态：可领/已领/已领完/已用（灰化+印章） */
 import { computed } from 'vue'
 
 const props = withDefaults(
@@ -10,7 +10,7 @@ const props = withDefaults(
       name?: string
       desc?: string
       expire?: string
-      status?: 'available' | 'claimed' | 'used'
+      status?: 'available' | 'claimed' | 'soldout' | 'used'
     }
   }>(),
   { coupon: () => ({ amount: 0, minSpend: 0, name: '', desc: '', expire: '', status: 'available' as const }) },
@@ -19,7 +19,9 @@ const props = withDefaults(
 const emit = defineEmits<{ action: [] }>()
 
 const status = computed(() => props.coupon.status ?? 'available')
-const statusText = computed(() => (status.value === 'used' ? '已使用' : status.value === 'claimed' ? '已领取' : '去领取'))
+const statusText = computed(() =>
+  status.value === 'used' ? '已使用' : status.value === 'claimed' ? '已领取' : status.value === 'soldout' ? '已领完' : '去领取',
+)
 </script>
 
 <template>
@@ -150,9 +152,19 @@ const statusText = computed(() => (status.value === 'used' ? '已使用' : statu
   background: color-mix(in srgb, var(--c-blue-500) 55%, var(--surface));
 }
 
-.g-coupon--claimed .g-coupon__action {
+.g-coupon--claimed .g-coupon__action,
+.g-coupon--soldout .g-coupon__action {
   color: var(--brand);
   background: color-mix(in srgb, var(--brand) 12%, transparent);
+}
+
+.g-coupon--soldout {
+  opacity: 0.7;
+}
+
+.g-coupon--soldout .g-coupon__amount {
+  background: color-mix(in srgb, var(--text-3) 25%, var(--surface));
+  color: var(--text-2);
 }
 
 .g-coupon--used {

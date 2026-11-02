@@ -1,14 +1,14 @@
 <script setup lang="ts">
-/** 券包：领券中心 + 我的券（GCouponCard 三态演示） */
-import { onMounted, ref } from 'vue'
+/** 券包：领券中心（后端模板动态加载）+ 我的券（GCouponCard 三态演示） */
+import { computed, onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { GNavBar, GTabBar, GCouponCard, GSkeleton, GEmpty, GToast } from '@/g-ui'
-import { myCoupons, claimCoupon, COUPON_TEMPLATES, type Coupon } from '@/api/user'
+import { myCoupons, claimCoupon, couponTemplates, type Coupon, type CouponTemplate } from '@/api/user'
 
 const router = useRouter()
 const tab = ref('coupons')
 const coupons = ref<Coupon[]>([])
-const templates = ref<{ id: number; name: string; amount: number; minSpend: number; note: string }[]>(COUPON_TEMPLATES)
+const templates = ref<CouponTemplate[]>([])
 const loading = ref(true)
 const toast = ref(false)
 const toastMsg = ref('')
@@ -18,8 +18,10 @@ const claimedIds = ref<Set<number>>(new Set())
 async function load() {
   loading.value = true
   try {
-    coupons.value = await myCoupons()
-    claimedIds.value = new Set(coupons.value.map((c) => c.couponTemplateId))
+    const [mine, tpls] = await Promise.all([myCoupons(), couponTemplates()])
+    coupons.value = mine
+    claimedIds.value = new Set(mine.map((c) => c.couponTemplateId))
+    templates.value = tpls.filter((t) => t.status === 0)
   } finally {
     loading.value = false
   }
@@ -37,6 +39,29 @@ async function claim(templateId: number) {
     toast.value = true
   }
 }
+
+/** 模板 → GCouponCard 展示（含已领完/已领取/可领取三态） */
+function toCard(t: CouponTemplate) {
+  const claimed = claimedIds.value.has(t.id)
+  const soldOut = t.receivedCount >= t.totalCount
+  const status = claimed ? 'claimed' : soldOut ? 'soldout' : 'available'
+  const name = t.templateName
+  const amount = t.type === 'DISCOUNT' ? 0 : Number(t.discountValue)
+  const minSpend = Number(t.threshold)
+  const desc = claimed
+    ? '已领取，每人限领一张'
+    : soldOut
+      ? '已领完，下次早点来'
+      : t.type === 'DISCOUNT'
+        ? '下单自动打折'
+        : minSpend > 0
+          ? `满${minSpend}元可用`
+          : '无门槛'
+  return { id: t.id, name, amount, minSpend, desc, status: status as 'available' | 'claimed' | 'soldout' | 'used' }
+}
+
+/** 领券中心展示列表 */
+const toCards = computed(() => templates.value.map(toCard))
 </script>
 
 <template>
@@ -46,15 +71,9 @@ async function claim(templateId: number) {
     <h3 class="coupons__section">领券中心</h3>
     <div v-if="templates.length" class="coupons__list">
       <GCouponCard
-        v-for="t in templates"
+        v-for="t in toCards"
         :key="t.id"
-        :coupon="{
-          amount: t.amount,
-          minSpend: t.minSpend,
-          name: t.name,
-          desc: claimedIds.has(t.id) ? '已领取，每人限领一张' : t.note,
-          status: claimedIds.has(t.id) ? 'claimed' : 'available',
-        }"
+        :coupon="t"
         @action="claim(t.id)"
       />
     </div>

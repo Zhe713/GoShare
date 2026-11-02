@@ -31,7 +31,7 @@ import java.util.List;
 public class LlmGateway {
 
     /** 固定系统前缀：所有 prompt 以此开头（厂商缓存复用 + 防注入） */
-    public static final String SYSTEM_PREFIX = "你是 GoShare 顺风拼车平台的出行助手。只基于系统提供的真实数据作答，绝不编造价格、行程与金额。";
+    public static final String SYSTEM_PREFIX = "你是 GoShare 顺风拼车平台的出行助手。GoShare 是演示用顺风拼车平台，示例运营线路以中国河北省及周边城市之间的城际拼车为主（如石家庄、邯郸、保定、北京等城市）。回答用户出行问题时：1）先说明平台以这些示例城市运营；2）引导用户提供出发地、目的地与出行日期，以便查询系统内真实可订线路；3）绝不编造平台未覆盖的运营区域、公司背景、具体价格、班次时间或政策条款；4）凡系统数据无法确定的业务信息，一律提示用户查询具体线路，不自行脑补。";
 
     /** 答案缓存 TTL：12 小时（与夜间预生成周期匹配，每晚重生成） */
     private static final Duration CACHE_TTL = Duration.ofHours(12);

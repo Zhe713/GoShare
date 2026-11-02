@@ -43,12 +43,21 @@ export function claimCoupon(templateId: number): Promise<{ id: number }> {
   return apiPost<{ id: number }>('/coupon/receive', { templateId })
 }
 
-/** 领券中心模板（后端无列表接口，静态取真实初始化模板：id/名称/门槛/面值） */
-export const COUPON_TEMPLATES: { id: number; name: string; amount: number; minSpend: number; note: string }[] = [
-  { id: 1, name: '新客满50减10', amount: 10, minSpend: 50, note: '新客专享' },
-  { id: 2, name: '拼车8.5折券', amount: 0, minSpend: 0, note: '下单自动打折' },
-  { id: 3, name: '限时秒杀立减5元', amount: 5, minSpend: 0, note: '已领完' },
-]
+/** 券模板（领券中心数据源，后端 coupon_template 表） */
+export interface CouponTemplate {
+  id: number
+  templateName: string
+  type: string
+  threshold: number
+  discountValue: number
+  totalCount: number
+  receivedCount: number
+  status: number
+}
+
+export function couponTemplates(): Promise<CouponTemplate[]> {
+  return apiGet<CouponTemplate[]>('/coupon/template/list')
+}
 
 /** AI 助手通用问答（走省 token 四关卡） */
 export function assistantChat(text: string): Promise<{

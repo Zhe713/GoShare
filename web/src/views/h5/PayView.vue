@@ -24,6 +24,14 @@ onMounted(async () => {
   const orderNo = route.params.orderNo as string
   try {
     order.value = await getOrder(orderNo)
+    // 服务端仅 CREATED 可支付：已支付/超时/取消等状态直接提示，避免「点了才报错」
+    if (order.value.status !== 'CREATED') {
+      error.value =
+        order.value.status === 'PAID'
+          ? '订单已支付，无需重复支付'
+          : '订单当前状态不可支付，请返回重新下单'
+      return
+    }
     // 服务端截止时间：createdAt + 15min（与订单超时释放扫描口径一致）
     const deadline = new Date(order.value.createdAt).getTime() + PAY_WINDOW_MS
     leftMs.value = Math.max(0, deadline - Date.now())

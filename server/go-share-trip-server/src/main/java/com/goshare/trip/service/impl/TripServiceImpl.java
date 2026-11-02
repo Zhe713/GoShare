@@ -112,7 +112,20 @@ public class TripServiceImpl implements TripService {
     @Override
     public TripVO detail(Long tripId) {
         Trip trip = getById(tripId);
+        ensureStock(trip);
         return toVO(trip);
+    }
+
+    /** 库存自愈：Redis 座位键缺失时按 DB 剩余座位初始化（兼容种子/直插行程，保证下单可扣） */
+    private void ensureStock(Trip trip) {
+        try {
+            String key = SEAT_KEY_PREFIX + trip.getId();
+            if (!Boolean.TRUE.equals(redisTemplate.hasKey(key))) {
+                redisTemplate.opsForValue().set(key, String.valueOf(trip.getRemainSeats()));
+            }
+        } catch (Exception e) {
+            log.warn("初始化行程库存失败 tripId={}", trip.getId(), e);
+        }
     }
 
     @Override
