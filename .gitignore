@@ -29,3 +29,7 @@ Thumbs.db
 # 本地环境配置（含密码等敏感信息）
 .env
 *.local.yml
+
+# E2E 测试产物
+web/test-results/
+web/playwright-report/

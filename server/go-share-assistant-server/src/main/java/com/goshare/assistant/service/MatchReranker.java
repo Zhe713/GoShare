@@ -130,7 +130,7 @@ public final class MatchReranker {
         if (st.getTrustScore().doubleValue() >= 4.5) {
             reasons.add("车主信任分 " + st.getTrustScore().toPlainString() + " 分，靠谱车主");
         }
-        if (priceScore >= 0.9) {
+        if (priceScore >= 0.9 && st.getPrice() != null) {
             reasons.add("价格 " + st.getPrice().toPlainString() + " 元，符合你要便宜的需求");
         }
         if (st.getRemark() != null && st.getRemark().contains("大件")) {

@@ -70,4 +70,47 @@ class MatchRerankerTest {
                 Map.of(1L, BigDecimal.valueOf(5.0)), Map.of(), q);
         assertEquals(2L, ranked.get(0).getTripId());
     }
+
+    @Test
+    void 低信任无偏好解释层降级为路线匹配() {
+        // 信任分 3.0（<4.5 不夸车主）+ 无时间/价格偏好 + 无备注
+        NlTripQuery q = NlTripParser.parse("去邯郸");
+        List<EsTripHit> candidates = List.of(
+                hit(1, 1, 18, 1, new BigDecimal("80"))
+        );
+        List<MatchReranker.ScoredTrip> ranked = MatchReranker.rerank(candidates,
+                Map.of(1L, BigDecimal.valueOf(3.0)), Map.of(), q);
+        assertEquals(1L, ranked.get(0).getTripId());
+        // 信任分透传（getOrDefault 分支）
+        assertEquals(0, ranked.get(0).getTrustScore().compareTo(BigDecimal.valueOf(3.0)));
+        // 价格 80 元不触发"便宜"解释；无大件备注不触发；信任低不触发 → 只有余座解释
+        assertTrue(ranked.get(0).getReasons().contains("还有 1 个空座可订"));
+        assertTrue(ranked.get(0).getReasons().stream()
+                .noneMatch(r -> r.contains("便宜") || r.contains("靠谱车主") || r.contains("大件")));
+    }
+
+    @Test
+    void 极端场景默认信任分远时差无价格零余座() {
+        // 偏好便宜+带大件：时差 10h（0.4 分）、价格 null（按 0 归一化）、余座 0（0 分）、信任分走默认 5.0
+        NlTripQuery q = NlTripParser.parse("要便宜能带大件");
+        EsTripHit hit = new EsTripHit();
+        hit.setId(9L);
+        hit.setDriverId(9L);
+        hit.setFromCity("石家庄");
+        hit.setToCity("邯郸");
+        hit.setDepartureTime(LocalDateTime.of(2026, 10, 30, 8, 0));
+        hit.setRemainSeats(0);
+        hit.setPrice(null);
+        hit.setStatus(0);
+
+        List<MatchReranker.ScoredTrip> ranked = MatchReranker.rerank(List.of(hit), Map.of(), Map.of(), q);
+
+        assertEquals(1, ranked.size());
+        // 默认信任分 5.0（getOrDefault 默认分支）
+        assertEquals(0, ranked.get(0).getTrustScore().compareTo(BigDecimal.valueOf(5.0)));
+        // 大件偏好 + 无备注 → 降权 0.15（分数低于同路线满分候选）
+        // 价格 null → 不触发"符合你要便宜"解释
+        assertTrue(ranked.get(0).getReasons().stream()
+                .noneMatch(r -> r.contains("便宜")));
+    }
 }

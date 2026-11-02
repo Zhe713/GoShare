@@ -56,4 +56,10 @@ class NlTripParserTest {
         NlTripQuery tomorrow = NlTripParser.parse("后天去天津");
         assertEquals(LocalDate.now().plusDays(2), tomorrow.getDepartDate());
     }
+
+    @Test
+    void 空输入与空白_返回空查询() {
+        assertNull(NlTripParser.parse(null).getToCity());
+        assertNull(NlTripParser.parse("   ").getToCity());
+    }
 }
