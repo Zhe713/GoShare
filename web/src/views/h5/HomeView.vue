@@ -1,8 +1,8 @@
 <script setup lang="ts">
-/** 首页：搜索入口 + 推荐行程 + AI 助手入口 + 底部 TabBar（Glass） */
+/** 首页：搜索入口 + 推荐行程（可换线路刷新）+ AI 助手入口 + 底部 TabBar（Glass） */
 import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
-import { GNavBar, GTabBar, GTripCard, GSkeleton, GError } from '@/g-ui'
+import { GNavBar, GTabBar, GTripCard, GSkeleton, GError, GSheet, GInput, GButton, GEmpty, GCard } from '@/g-ui'
 import { searchTrips, type Trip } from '@/api/trip'
 
 const router = useRouter()
@@ -10,12 +10,18 @@ const tab = ref('home')
 const trips = ref<Trip[]>([])
 const loading = ref(true)
 const error = ref('')
+/** 当前推荐线路（可换线路自更新） */
+const routeFrom = ref('石家庄')
+const routeTo = ref('北京')
+const showPicker = ref(false)
+const pickFrom = ref('石家庄')
+const pickTo = ref('北京')
 
 async function load() {
   loading.value = true
   error.value = ''
   try {
-    trips.value = await searchTrips('石家庄', '北京')
+    trips.value = await searchTrips(routeFrom.value, routeTo.value)
   } catch (e) {
     error.value = (e as Error).message
   } finally {
@@ -23,6 +29,17 @@ async function load() {
   }
 }
 onMounted(load)
+
+/** 换线路：确认后重新拉取该线路行程 */
+function switchRoute() {
+  const from = pickFrom.value.trim()
+  const to = pickTo.value.trim()
+  if (!from || !to) return
+  routeFrom.value = from
+  routeTo.value = to
+  showPicker.value = false
+  load()
+}
 </script>
 
 <template>
@@ -46,13 +63,17 @@ onMounted(load)
       <span class="home__ai-arrow" aria-hidden="true">›</span>
     </div>
 
-    <h3 class="home__section">推荐行程 · 石家庄 → 北京</h3>
+    <div class="home__section-row">
+      <h3 class="home__section">推荐行程 · {{ routeFrom }} → {{ routeTo }}</h3>
+      <button class="home__switch" type="button" @click="showPicker = true">换线路</button>
+    </div>
 
     <div class="home__list">
       <template v-if="loading">
         <GCard v-for="i in 3" :key="i"><GSkeleton :rows="3" :height="14" /></GCard>
       </template>
       <GError v-else-if="error" :message="error" @retry="load" />
+      <GEmpty v-else-if="!trips.length" text="该线路暂无行程，换条线路试试" />
       <GTripCard
         v-for="t in trips"
         :key="t.id"
@@ -60,6 +81,12 @@ onMounted(load)
         @click="router.push(`/trip/${t.id}`)"
       />
     </div>
+
+    <GSheet v-model="showPicker" title="换一条线路">
+      <GInput v-model="pickFrom" label="出发城市" placeholder="如：石家庄" />
+      <GInput v-model="pickTo" label="到达城市" placeholder="如：北京" />
+      <GButton type="primary" block class="home__pick-btn" @click="switchRoute">查看该线路行程</GButton>
+    </GSheet>
 
     <GTabBar v-model="tab" :tabs="[
       { key: 'home', label: '首页', icon: 'home' },
@@ -125,9 +152,31 @@ onMounted(load)
   font-size: var(--fs-24);
 }
 
-.home__section {
+.home__section-row {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
   margin: 0 var(--sp-2) var(--sp-2);
+}
+
+.home__section {
   font-size: var(--fs-16);
+}
+
+.home__switch {
+  height: 32px;
+  padding: 0 var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--brand);
+  background: var(--surface);
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--highlight);
+  cursor: pointer;
+}
+
+.home__pick-btn {
+  margin-top: var(--sp-2);
 }
 
 .home__list {

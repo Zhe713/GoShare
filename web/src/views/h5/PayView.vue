@@ -13,20 +13,34 @@ const loading = ref(true)
 const error = ref('')
 const paying = ref(false)
 const paid = ref(false)
+/** 支付截止 = 订单创建时间 + 15 分钟（服务端订单超时释放口径一致），刷新页面不重置 */
 const leftMs = ref(15 * 60 * 1000)
+const expired = ref(false)
 let timer: ReturnType<typeof setInterval> | null = null
+
+const PAY_WINDOW_MS = 15 * 60 * 1000
 
 onMounted(async () => {
   const orderNo = route.params.orderNo as string
   try {
     order.value = await getOrder(orderNo)
+    // 服务端截止时间：createdAt + 15min（与订单超时释放扫描口径一致）
+    const deadline = new Date(order.value.createdAt).getTime() + PAY_WINDOW_MS
+    leftMs.value = Math.max(0, deadline - Date.now())
+    if (leftMs.value <= 0) expired.value = true
   } catch (e) {
     error.value = (e as Error).message
   } finally {
     loading.value = false
   }
-  // 15 分钟支付倒计时（等宽数字）
-  timer = setInterval(() => (leftMs.value -= 1000), 1000)
+  // 每秒递减；到 0 视为超时失效，停止倒计时
+  timer = setInterval(() => {
+    leftMs.value = Math.max(0, leftMs.value - 1000)
+    if (leftMs.value === 0) {
+      expired.value = true
+      if (timer) clearInterval(timer)
+    }
+  }, 1000)
 })
 
 onUnmounted(() => {
@@ -58,7 +72,8 @@ async function pay() {
       <GCard class="pay__card">
         <p class="pay__label">待支付金额</p>
         <p class="pay__amount num"><b>{{ order.payPrice }}</b> 元</p>
-        <p class="pay__countdown num">{{ countdownText(leftMs) }}</p>
+        <p v-if="!expired" class="pay__countdown num">还剩 {{ countdownText(leftMs) }} 完成支付</p>
+        <p v-else class="pay__countdown pay__countdown--expired num">已超时，订单已关闭</p>
         <p class="pay__no num">订单号 {{ order.orderNo }}</p>
       </GCard>
 
@@ -75,10 +90,11 @@ async function pay() {
       </GCard>
 
       <div class="pay__footer safe-bottom">
-        <GButton type="primary" block :loading="paying" @click="pay">
-          {{ paid ? '支付成功' : '立即支付' }}
+        <GButton type="primary" block :loading="paying" :disabled="expired" @click="pay">
+          {{ paid ? '支付成功' : expired ? '订单已超时' : '立即支付' }}
         </GButton>
         <p v-if="paid" class="pay__done">✓ 支付成功，可回到首页查看</p>
+        <p v-else-if="expired" class="pay__expired">支付超时订单已关闭，可重新下单</p>
       </div>
     </template>
   </div>
@@ -115,6 +131,17 @@ async function pay() {
   margin-top: var(--sp-1);
   font-size: var(--fs-13);
   color: var(--text-2);
+}
+
+.pay__countdown--expired {
+  color: var(--c-red-500);
+}
+
+.pay__expired {
+  margin-top: var(--sp-2);
+  text-align: center;
+  font-size: var(--fs-14);
+  color: var(--text-3);
 }
 
 .pay__no {

@@ -12,6 +12,8 @@ export interface Order {
   status: string
   paymentNo: string | null
   cancelReason: string | null
+  /** 订单创建时间（支付倒计时起点：创建后 15 分钟内支付） */
+  createdAt: string
 }
 
 export function createOrder(body: {

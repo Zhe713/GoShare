@@ -12,11 +12,14 @@ const templates = ref<{ id: number; name: string; amount: number; minSpend: numb
 const loading = ref(true)
 const toast = ref(false)
 const toastMsg = ref('')
+/** 已领取过的模板 ID（领券中心按钮据此置灰，避免「已领完仍可点」） */
+const claimedIds = ref<Set<number>>(new Set())
 
 async function load() {
   loading.value = true
   try {
     coupons.value = await myCoupons()
+    claimedIds.value = new Set(coupons.value.map((c) => c.couponTemplateId))
   } finally {
     loading.value = false
   }
@@ -45,7 +48,13 @@ async function claim(templateId: number) {
       <GCouponCard
         v-for="t in templates"
         :key="t.id"
-        :coupon="{ amount: t.amount, minSpend: t.minSpend, name: t.name, desc: t.note, status: 'available' }"
+        :coupon="{
+          amount: t.amount,
+          minSpend: t.minSpend,
+          name: t.name,
+          desc: claimedIds.has(t.id) ? '已领取，每人限领一张' : t.note,
+          status: claimedIds.has(t.id) ? 'claimed' : 'available',
+        }"
         @action="claim(t.id)"
       />
     </div>
