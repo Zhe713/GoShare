@@ -11,6 +11,7 @@ import org.springframework.data.elasticsearch.core.query.CriteriaQuery;
 import org.springframework.stereotype.Service;
 
 import java.time.LocalDate;
+import java.time.LocalDateTime;
 import java.util.List;
 import java.util.stream.Collectors;
 
@@ -44,12 +45,13 @@ public class TripEsService {
         }
     }
 
-    /** 搜索行程（ES 检索：起终点匹配 + 状态可订 + 时间范围） */
+    /** 搜索行程（ES 检索：起终点匹配 + 状态可订 + 只看未出发 + 可选日期范围） */
     public List<TripDocument> search(String fromCity, String toCity, LocalDate departDate) {
         Criteria criteria = new Criteria()
                 .and(new Criteria("fromCity").is(fromCity))
                 .and(new Criteria("toCity").is(toCity))
-                .and(new Criteria("status").in(0, 1));
+                .and(new Criteria("status").in(0, 1))
+                .and(new Criteria("departureTime").greaterThanEqual(LocalDateTime.now()));
         if (departDate != null) {
             criteria.and(new Criteria("departureTime")
                     .greaterThanEqual(departDate.atStartOfDay())

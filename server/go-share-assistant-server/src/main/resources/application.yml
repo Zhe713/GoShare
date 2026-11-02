@@ -34,11 +34,11 @@ goshare:
     expire-hours: 24
   llm:
     # 模型接入方式：mock（默认，可演示零成本）| http（接真实 API，配置 http-url/api-key）
-    mode: http
+    mode: mock
     http-url: http://localhost:9999/v1/chat/completions
     api-key: mock-key
     # 数据版本号：行程价格/余座/券规则变化时 +1，所有旧答案缓存自动作废（防止把旧数据答出去）
-    data-version: 1
+    data-version: 2
     # 固定前缀校验开关：所有 prompt 必须以系统前缀开头（保证缓存复用 + 防注入）
     prefix-check: true
   ai:

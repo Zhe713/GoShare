@@ -55,18 +55,26 @@ public class LlmGateway {
         String hash = DigestUtils.md5DigestAsHex(prompt.getBytes(StandardCharsets.UTF_8));
         String cacheKey = cacheKey(hash);
 
-        // 关卡1：答案缓存（带数据版本号，版本 +1 后旧答案自动作废）
-        String cached = redisTemplate.opsForValue().get(cacheKey);
-        if (cached != null) {
-            record(bizType, tier, hash, 0, 0, (int) (System.currentTimeMillis() - start), true, false);
-            log.info("[llm-gateway] 关卡1缓存命中 biz={} q={}", bizType, question);
-            return LlmResult.of(cached, true, "cache", false, 0, 0, (int) (System.currentTimeMillis() - start));
+        // 关卡1：答案缓存（带数据版本号，版本 +1 后旧答案自动作废；Redis 不可用时降级跳过，不影响主流程）
+        try {
+            String cached = redisTemplate.opsForValue().get(cacheKey);
+            if (cached != null) {
+                record(bizType, tier, hash, 0, 0, (int) (System.currentTimeMillis() - start), true, false);
+                log.info("[llm-gateway] 关卡1缓存命中 biz={} q={}", bizType, question);
+                return LlmResult.of(cached, true, "cache", false, 0, 0, (int) (System.currentTimeMillis() - start));
+            }
+        } catch (Exception e) {
+            log.warn("[llm-gateway] Redis 不可用，跳过缓存关卡: {}", e.getMessage());
         }
 
         // 关卡2：小模型先答（规则意图零调用，未触碰大模型）
         String ruleAnswer = RuleAnswerProvider.maybeAnswer(question);
         if (ruleAnswer != null) {
-            redisTemplate.opsForValue().set(cacheKey, ruleAnswer, CACHE_TTL);
+            try {
+                redisTemplate.opsForValue().set(cacheKey, ruleAnswer, CACHE_TTL);
+            } catch (Exception e) {
+                log.warn("[llm-gateway] 规则答案写缓存失败（不影响返回）: {}", e.getMessage());
+            }
             record(bizType, tier, hash, 0, 0, (int) (System.currentTimeMillis() - start), false, true);
             log.info("[llm-gateway] 关卡2小模型规则命中 biz={} q={}", bizType, question);
             return LlmResult.of(ruleAnswer, false, "小模型(规则)", true, 0, 0, (int) (System.currentTimeMillis() - start));
@@ -74,7 +82,11 @@ public class LlmGateway {
 
         // 调模型（大模型档，mock 零成本 / http 真实 API）
         LlmClient.LlmResponse resp = llmClient.call(prompt, tier);
-        redisTemplate.opsForValue().set(cacheKey, resp.text(), CACHE_TTL);
+        try {
+            redisTemplate.opsForValue().set(cacheKey, resp.text(), CACHE_TTL);
+        } catch (Exception e) {
+            log.warn("[llm-gateway] 答案写缓存失败（不影响返回）: {}", e.getMessage());
+        }
         int elapsed = (int) (System.currentTimeMillis() - start);
         record(bizType, tier, hash, resp.inputTokens(), resp.outputTokens(), elapsed, false, false);
         log.info("[llm-gateway] 调用模型 biz={} q={} model={} in={} out={}",

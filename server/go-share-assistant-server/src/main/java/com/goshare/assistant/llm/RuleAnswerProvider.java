@@ -11,6 +11,7 @@ import java.util.Map;
 public final class RuleAnswerProvider {
 
     private static final List<Map.Entry<String, String>> RULES = List.of(
+            Map.entry("你是谁", "我是 GoShare 顺风拼车平台的 AI 出行助手。可以帮你查行程、算费用、解释取消与用券规则，也会在你要取消订单时先帮你算清违约金。有什么出行问题尽管问我。"),
             Map.entry("取消收费", "【通用规则】城际订单发车前 2 小时外取消不收取违约金；2 小时内取消按实付金额的 20% 收取违约金（单笔封顶 50 元）。具体这单扣多少，请提供订单号，我来帮你精确计算。"),
             Map.entry("违约金", "【通用规则】取消违约金按距发车时间分档：提前 2 小时以上免违约金；2 小时以内按实付金额 20% 收取，封顶 50 元。"),
             Map.entry("退钱", "【通用规则】取消后退款原路返回：发车前 2 小时外全额退款；2 小时内扣除违约金后退回剩余部分，通常 1-3 个工作日到账。"),

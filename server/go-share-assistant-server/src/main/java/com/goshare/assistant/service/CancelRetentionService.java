@@ -57,9 +57,14 @@ public class CancelRetentionService {
     public CancelRetentionVO preview(String orderNo) {
         CancelRetentionVO vo = new CancelRetentionVO();
 
-        // 1. 挽留幂等：同一订单只挽留一次（Redis 标记）
-        boolean firstTime = Boolean.TRUE.equals(
-                redisTemplate.opsForValue().setIfAbsent(RETENTION_KEY_PREFIX + orderNo, "1", Duration.ofHours(24)));
+        // 1. 挽留幂等：同一订单只挽留一次（Redis 标记；Redis 不可用时降级为首次挽留）
+        boolean firstTime = true;
+        try {
+            firstTime = Boolean.TRUE.equals(
+                    redisTemplate.opsForValue().setIfAbsent(RETENTION_KEY_PREFIX + orderNo, "1", Duration.ofHours(24)));
+        } catch (Exception e) {
+            log.warn("[cancel-retention] Redis 不可用，跳过挽留幂等: {}", e.getMessage());
+        }
         vo.setAlreadyRetained(!firstTime);
 
         // 2. 费用明细：order 服务 FeeCalculator 纯 Java 计算（金额不靠 LLM）

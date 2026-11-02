@@ -99,6 +99,7 @@ public class TripServiceImpl implements TripService {
                 .eq(Trip::getFromCity, fromCity)
                 .eq(Trip::getToCity, toCity)
                 .in(Trip::getStatus, 0, 1)
+                .ge(Trip::getDepartureTime, LocalDateTime.now())
                 .orderByAsc(Trip::getDepartureTime);
         if (departDate != null) {
             wrapper.ge(Trip::getDepartureTime, departDate.atStartOfDay())

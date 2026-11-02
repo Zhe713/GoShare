@@ -61,9 +61,14 @@ public class WorkOrderService {
                         .eq(WorkOrderMessage::getWorkOrderId, order.getId())
                         .orderByAsc(WorkOrderMessage::getId));
 
-        // 摘要只触发一次（Redis 幂等），防止重复调用模型/重复计算
+        // 摘要只触发一次（Redis 幂等），防止重复调用模型/重复计算；Redis 不可用时降级为首次生成
         String summaryKey = SUMMARY_KEY_PREFIX + order.getId();
-        boolean firstTime = Boolean.TRUE.equals(redisTemplate.opsForValue().setIfAbsent(summaryKey, "1", SUMMARY_TTL));
+        boolean firstTime = true;
+        try {
+            firstTime = Boolean.TRUE.equals(redisTemplate.opsForValue().setIfAbsent(summaryKey, "1", SUMMARY_TTL));
+        } catch (Exception e) {
+            log.warn("[work-order] Redis 不可用，跳过摘要幂等: {}", e.getMessage());
+        }
 
         String summary;
         String draft;
