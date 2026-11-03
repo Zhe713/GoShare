@@ -31,6 +31,15 @@ class TripWeatherRuleProviderTest {
     }
 
     @Test
+    void weatherCityPicksFirstOccurrenceInQuestion() {
+        // 「邯郸今天天气和北京到邯郸明天的行程」：天气意图命中时城市必须取句首的邯郸，不能因城市表顺序误取北京
+        WeatherRuleProvider p = new WeatherRuleProvider(mock(RestTemplate.class), new ObjectMapper());
+        WeatherRuleProvider.WeatherQuery q = p.resolve("邯郸今天天气和北京到邯郸明天的行程", List.of());
+        assertNotNull(q);
+        assertEquals("邯郸", q.city);
+    }
+
+    @Test
     void weatherCityNotFoundReturnsNullCity() {
         WeatherRuleProvider p = new WeatherRuleProvider(mock(RestTemplate.class), new ObjectMapper());
         WeatherRuleProvider.WeatherQuery q = p.resolve("明天天气怎么样", List.of());

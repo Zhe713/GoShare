@@ -70,6 +70,12 @@
             <artifactId>lombok</artifactId>
             <optional>true</optional>
         </dependency>
+        <!-- 农历计算（离线确定性历法，无外部依赖；供 AI 助手真实作答，杜绝农历幻觉） -->
+        <dependency>
+            <groupId>cn.6tail</groupId>
+            <artifactId>lunar</artifactId>
+            <version>1.7.7</version>
+        </dependency>
         <!-- 单测 -->
         <dependency>
             <groupId>org.springframework.boot</groupId>

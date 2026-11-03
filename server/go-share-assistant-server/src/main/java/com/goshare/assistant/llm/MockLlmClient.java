@@ -7,6 +7,8 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Component;
 
 import java.nio.charset.StandardCharsets;
+import java.util.List;
+import java.util.Map;
 
 /**
  * Mock LLM 客户端（默认）：零成本可演示
@@ -50,6 +52,37 @@ public class MockLlmClient implements LlmClient {
             return prompt.substring(idx + 4);
         }
         return prompt.length() > 200 ? prompt.substring(0, 200) : prompt;
+    }
+
+    @Override
+    public ToolChatResponse chat(List<ToolMessage> messages, List<Map<String, Object>> tools, Tier tier) {
+        // mock 不产生工具调用：直接按最后一条用户消息返回模板文本（功能演示零成本）
+        int delay = tier == Tier.LARGE ? 30 : 5;
+        try {
+            Thread.sleep(delay);
+        } catch (InterruptedException e) {
+            Thread.currentThread().interrupt();
+        }
+        String body = extractUserBody(messages);
+        String text = switch (tier) {
+            case SMALL -> "【小模型·规则答案】" + body;
+            case LARGE -> "【大模型·mock 输出】" + body;
+        };
+        int inputTokens = messages.stream().mapToInt(m -> estimateTokens(m.content() == null ? "" : m.content())).sum();
+        int outputTokens = estimateTokens(text);
+        log.info("[mock-llm] chat tier={} in={} out={}", tier, inputTokens, outputTokens);
+        return new ToolChatResponse(text, List.of(), inputTokens, outputTokens);
+    }
+
+    /** 提取消息列表里最后一条用户问题 */
+    private String extractUserBody(List<ToolMessage> messages) {
+        for (int i = messages.size() - 1; i >= 0; i--) {
+            ToolMessage m = messages.get(i);
+            if ("user".equals(m.role()) && m.content() != null) {
+                return m.content();
+            }
+        }
+        return "（无用户消息）";
     }
 
     /** 按字节估算 token（1 汉字 ≈ 3 字节 ≈ 1.5 token，简化 1.3） */

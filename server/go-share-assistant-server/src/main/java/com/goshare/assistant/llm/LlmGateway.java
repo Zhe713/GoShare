@@ -2,6 +2,7 @@ package com.goshare.assistant.llm;
 
 import com.goshare.assistant.config.LlmProperties;
 import com.goshare.assistant.entity.LlmCallLog;
+import com.goshare.assistant.llm.tool.ToolRegistry;
 import com.goshare.assistant.mapper.LlmCallLogMapper;
 import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
@@ -14,6 +15,7 @@ import java.nio.charset.StandardCharsets;
 import java.time.DayOfWeek;
 import java.time.Duration;
 import java.time.LocalDate;
+import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
 
@@ -36,6 +38,12 @@ public class LlmGateway {
     /** 固定系统前缀：所有 prompt 以此开头（厂商缓存复用 + 防注入） */
     public static final String SYSTEM_PREFIX = "你是 GoShare 顺风拼车平台的出行助手。GoShare 是演示用顺风拼车平台，示例运营线路以中国河北省及周边城市之间的城际拼车为主（如石家庄、邯郸、保定、北京等城市）。回答用户出行问题时：1）先说明平台以这些示例城市运营；2）引导用户提供出发地、目的地与出行日期，以便查询系统内真实可订线路；3）绝不编造平台未覆盖的运营区域、公司背景、具体价格、班次时间或政策条款；4）凡系统数据无法确定的业务信息，一律提示用户查询具体线路，不自行脑补。回复风格要求：像真人客服一样简洁口语化，一次回复不超过 4 句话；不使用 emoji、感叹号堆砌、营销腔和“重磅/超值/震撼”等话术；不知道就说不知道，不硬凑。";
 
+    /** 工具绑定约束：模型只能基于工具返回的真实数据作答，无工具不答（结构性去幻觉核心） */
+    public static final String TOOL_BINDING_RULE = "涉及行程班次、天气、农历、当前时间等需要实时数据的问题，你必须先调用提供的工具获取真实数据后再回答，禁止编造或凭记忆猜测数据。若没有可用工具或工具返回为空，必须明确告知用户“我暂时查不到这项数据”，绝不自行编造。";
+
+    /** 工具调用最大轮数（防模型死循环；每轮至少执行一次工具取数） */
+    private static final int MAX_TOOL_ROUNDS = 3;
+
     /** 答案缓存 TTL：12 小时（与夜间预生成周期匹配，每晚重生成）；天气答案实时性要求高，单独 15 分钟 */
     private static final Duration CACHE_TTL = Duration.ofHours(12);
 
@@ -52,6 +60,8 @@ public class LlmGateway {
     private final WeatherRuleProvider weatherRuleProvider;
     private final TripRuleProvider tripRuleProvider;
     private final TimeRuleProvider timeRuleProvider;
+    private final ToolRegistry toolRegistry;
+    private final LunarRuleProvider lunarRuleProvider;
 
     /**
      * 统一入口（无历史上下文的便捷重载）
@@ -171,6 +181,19 @@ public class LlmGateway {
             return LlmResult.of(timeAnswer, false, "小模型(时间)", true, 0, 0, (int) (System.currentTimeMillis() - start));
         }
 
+        // 关卡2：农历（零模型调用·离线确定性历法；农历日期可复现，写入缓存）
+        String lunarAnswer = lunarRuleProvider.maybeAnswer(question);
+        if (lunarAnswer != null) {
+            try {
+                redisTemplate.opsForValue().set(ruleKey, lunarAnswer, CACHE_TTL);
+            } catch (Exception e) {
+                log.warn("[llm-gateway] 农历答案写缓存失败（不影响返回）: {}", e.getMessage());
+            }
+            record(bizType, tier, ruleHash, 0, 0, (int) (System.currentTimeMillis() - start), false, true);
+            log.info("[llm-gateway] 关卡2农历命中 biz={} q={}", bizType, question);
+            return LlmResult.of(lunarAnswer, false, "小模型(农历)", true, 0, 0, (int) (System.currentTimeMillis() - start));
+        }
+
         // 关卡2：小模型先答（规则意图零调用，未触碰大模型）
         String ruleAnswer = RuleAnswerProvider.maybeAnswer(question);
         if (ruleAnswer != null) {
@@ -184,19 +207,57 @@ public class LlmGateway {
             return LlmResult.of(ruleAnswer, false, "小模型(规则)", true, 0, 0, (int) (System.currentTimeMillis() - start));
         }
 
-        // 调模型（大模型档，mock 零成本 / http 真实 API）；答案带上下文缓存（不同历史不串答案）
-        LlmClient.LlmResponse resp = llmClient.call(fullPrompt, tier);
+        // 关卡3.5：Function Calling 工具通道（结构性去幻觉兜底）——
+        // 规则未命中时不再裸生成：模型只能通过工具取真实数据（行程/天气/农历/时间），
+        // 工具执行结果回填后再让模型组织话术；无工具可答时模型按约束明确说「查不到」，绝不编造。
+        List<LlmClient.ToolMessage> messages = new ArrayList<>();
+        messages.add(new LlmClient.ToolMessage("system", todayLine() + SYSTEM_PREFIX + TOOL_BINDING_RULE));
+        if (history != null) {
+            for (Map<String, String> h : history) {
+                String role = h.getOrDefault("role", "user");
+                String content = h.getOrDefault("content", "");
+                if (!"user".equals(role) && !"assistant".equals(role)) {
+                    continue;
+                }
+                if (content == null || content.isBlank()) {
+                    continue;
+                }
+                messages.add(new LlmClient.ToolMessage(role, content));
+            }
+        }
+        messages.add(new LlmClient.ToolMessage("user", question));
+        List<Map<String, Object>> tools = toolRegistry.toOpenAiTools();
+        LlmClient.ToolChatResponse resp = null;
+        int toolRounds = 0;
+        for (int round = 0; round < MAX_TOOL_ROUNDS; round++) {
+            resp = llmClient.chat(messages, tools, tier);
+            if (resp.toolCalls().isEmpty()) {
+                break;
+            }
+            toolRounds++;
+            log.info("[llm-gateway] 工具轮次{} 调用{}个工具 biz={} q={}", toolRounds, resp.toolCalls().size(), bizType, question);
+            messages.add(LlmClient.ToolMessage.assistantToolCalls(resp.toolCalls()));
+            for (LlmClient.ToolCall call : resp.toolCalls()) {
+                String result = toolRegistry.execute(call.name(), call.arguments());
+                messages.add(LlmClient.ToolMessage.toolResult(call.id(), result));
+            }
+        }
+        String answer = (resp == null || resp.text() == null || resp.text().isBlank())
+                ? "抱歉，暂时无法查询到这项数据，请换个问法试试。"
+                : resp.text();
         try {
-            redisTemplate.opsForValue().set(contextKey, resp.text(), CACHE_TTL);
+            redisTemplate.opsForValue().set(contextKey, answer, CACHE_TTL);
         } catch (Exception e) {
             log.warn("[llm-gateway] 答案写缓存失败（不影响返回）: {}", e.getMessage());
         }
         int elapsed = (int) (System.currentTimeMillis() - start);
-        record(bizType, tier, contextHash, resp.inputTokens(), resp.outputTokens(), elapsed, false, false);
-        log.info("[llm-gateway] 调用模型 biz={} q={} model={} in={} out={}",
-                bizType, question, tier, resp.inputTokens(), resp.outputTokens());
-        return LlmResult.of(resp.text(), false, tier == LlmClient.Tier.SMALL ? "小模型" : "大模型",
-                false, resp.inputTokens(), resp.outputTokens(), elapsed);
+        record(bizType, tier, contextHash, resp == null ? 0 : resp.inputTokens(),
+                resp == null ? 0 : resp.outputTokens(), elapsed, false, false);
+        log.info("[llm-gateway] 工具通道完成 biz={} q={} model={} tools={} in={} out={}",
+                bizType, question, tier, toolRounds,
+                resp == null ? 0 : resp.inputTokens(), resp == null ? 0 : resp.outputTokens());
+        return LlmResult.of(answer, false, tier == LlmClient.Tier.SMALL ? "小模型" : "大模型",
+                false, resp == null ? 0 : resp.inputTokens(), resp == null ? 0 : resp.outputTokens(), elapsed);
     }
 
     /** 今日日期行：让模型感知「今天几号、星期几」（如「今天是2026年11月3日，周二。」） */

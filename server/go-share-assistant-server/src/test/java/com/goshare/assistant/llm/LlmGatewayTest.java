@@ -2,6 +2,7 @@ package com.goshare.assistant.llm;
 
 import com.goshare.assistant.config.LlmProperties;
 import com.goshare.assistant.entity.LlmCallLog;
+import com.goshare.assistant.llm.tool.ToolRegistry;
 import com.goshare.assistant.mapper.LlmCallLogMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -10,13 +11,14 @@ import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ValueOperations;
 
 import java.time.Duration;
+import java.util.List;
 
 import static org.junit.jupiter.api.Assertions.*;
 import static org.mockito.ArgumentMatchers.*;
 import static org.mockito.Mockito.*;
 
 /**
- * LLM 网关四关卡：答案缓存命中 / 规则小模型先答 / 直调模型记账 / 缓存键版本化
+ * LLM 网关四关卡 + 工具通道：答案缓存命中 / 规则与农历小模型先答 / Function Calling 兜底 / 缓存键版本化
  */
 class LlmGatewayTest {
 
@@ -24,6 +26,8 @@ class LlmGatewayTest {
     private StringRedisTemplate redisTemplate;
     private LlmCallLogMapper llmCallLogMapper;
     private LlmProperties properties;
+    private ToolRegistry toolRegistry;
+    private LunarRuleProvider lunarRuleProvider;
     private LlmGateway gateway;
 
     @BeforeEach
@@ -34,8 +38,11 @@ class LlmGatewayTest {
         llmCallLogMapper = mock(LlmCallLogMapper.class);
         properties = new LlmProperties();
         properties.setDataVersion(2);
+        toolRegistry = mock(ToolRegistry.class);
+        lunarRuleProvider = mock(LunarRuleProvider.class);
         gateway = new LlmGateway(llmClient, redisTemplate, llmCallLogMapper, properties,
-                mock(WeatherRuleProvider.class), mock(TripRuleProvider.class), mock(TimeRuleProvider.class));
+                mock(WeatherRuleProvider.class), mock(TripRuleProvider.class), mock(TimeRuleProvider.class),
+                toolRegistry, lunarRuleProvider);
         ValueOperations<String, String> valueOps = mock(ValueOperations.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
     }
@@ -51,6 +58,7 @@ class LlmGatewayTest {
         assertEquals("cache", result.getModelName());
         assertFalse(result.isGateSkipped());
         verify(llmClient, never()).call(anyString(), any());
+        verify(llmClient, never()).chat(anyList(), anyList(), any());
         // 记账：缓存命中标记
         ArgumentCaptor<LlmCallLog> captor = ArgumentCaptor.forClass(LlmCallLog.class);
         verify(llmCallLogMapper).insert(captor.capture());
@@ -76,11 +84,26 @@ class LlmGatewayTest {
     }
 
     @Test
-    void nonRuleQuestionCallsModelAndWritesCache() {
-        String question = "帮我写一首关于秋风的藏头诗"; // 不在规则模板内，直调小模型
+    void lunarIntentHitSkipsModelWithRealLunar() {
         when(redisTemplate.opsForValue().get(anyString())).thenReturn(null);
-        when(llmClient.call(anyString(), eq(LlmClient.Tier.SMALL)))
-                .thenReturn(new LlmClient.LlmResponse("秋日私语…", 120, 60));
+        when(lunarRuleProvider.maybeAnswer("农历")).thenReturn("今天是农历丙午（马）年九月廿五。");
+
+        LlmResult result = gateway.ask("FAQ天气", "农历", LlmClient.Tier.SMALL);
+
+        assertFalse(result.isFromCache());
+        assertTrue(result.isGateSkipped());
+        assertEquals("小模型(农历)", result.getModelName());
+        assertEquals("今天是农历丙午（马）年九月廿五。", result.getText());
+        verify(llmClient, never()).chat(anyList(), anyList(), any());
+    }
+
+    @Test
+    void nonRuleQuestionGoesThroughToolChannelAndWritesCache() {
+        String question = "帮我写一首关于秋风的藏头诗"; // 不在规则模板内，兜底走工具通道
+        when(redisTemplate.opsForValue().get(anyString())).thenReturn(null);
+        when(toolRegistry.toOpenAiTools()).thenReturn(List.of());
+        when(llmClient.chat(anyList(), anyList(), eq(LlmClient.Tier.SMALL)))
+                .thenReturn(new LlmClient.ToolChatResponse("秋日私语…", 120, 60));
 
         LlmResult result = gateway.ask("B1工单摘要", question, LlmClient.Tier.SMALL);
 
@@ -89,18 +112,29 @@ class LlmGatewayTest {
         assertEquals("小模型", result.getModelName());
         assertEquals(120, result.getInputTokens());
         assertEquals(60, result.getOutputTokens());
-        verify(llmClient).call(argThat(p -> p.contains(LlmGateway.SYSTEM_PREFIX)), any());
+        verify(llmClient).chat(anyList(), anyList(), eq(LlmClient.Tier.SMALL));
+        verify(llmClient, never()).call(anyString(), any());
         verify(redisTemplate.opsForValue()).set(anyString(), eq("秋日私语…"), eq(Duration.ofHours(12)));
     }
 
     @Test
-    void promptAlwaysPrefixedWithSystemPrefix() {
-        // 关卡3：固定前缀强制拼接（厂商缓存复用 + 防注入）
+    void toolChannelMessagesCarrySystemPrefixAndBindingRule() {
+        // 关卡3：固定前缀 + 工具绑定约束强制拼入 system 消息
         when(redisTemplate.opsForValue().get(anyString())).thenReturn(null);
-        when(llmClient.call(anyString(), any())).thenReturn(new LlmClient.LlmResponse("x", 1, 1));
+        when(toolRegistry.toOpenAiTools()).thenReturn(List.of());
+        when(llmClient.chat(anyList(), anyList(), any()))
+                .thenReturn(new LlmClient.ToolChatResponse("x", 1, 1));
+
         gateway.ask("FAQ天气", "明天天气怎么样", LlmClient.Tier.LARGE);
-        verify(llmClient).call(argThat(p -> p.contains("用户：明天天气怎么样")
-                && p.contains(LlmGateway.SYSTEM_PREFIX)), eq(LlmClient.Tier.LARGE));
+
+        @SuppressWarnings("unchecked")
+        ArgumentCaptor<List<LlmClient.ToolMessage>> captor = ArgumentCaptor.forClass(List.class);
+        verify(llmClient).chat(captor.capture(), anyList(), eq(LlmClient.Tier.LARGE));
+        List<LlmClient.ToolMessage> msgs = captor.getValue();
+        assertTrue(msgs.get(0).content().contains(LlmGateway.SYSTEM_PREFIX));
+        assertTrue(msgs.get(0).content().contains(LlmGateway.TOOL_BINDING_RULE));
+        assertEquals("user", msgs.get(msgs.size() - 1).role());
+        assertTrue(msgs.get(msgs.size() - 1).content().contains("明天天气怎么样"));
     }
 
     @Test
@@ -116,8 +150,9 @@ class LlmGatewayTest {
     @Test
     void prewarmRunsAllHotQuestionsWithoutError() {
         when(redisTemplate.opsForValue().get(anyString())).thenReturn(null);
-        when(llmClient.call(anyString(), any()))
-                .thenReturn(new LlmClient.LlmResponse("预生成答案", 10, 20));
+        when(toolRegistry.toOpenAiTools()).thenReturn(List.of());
+        when(llmClient.chat(anyList(), anyList(), any()))
+                .thenReturn(new LlmClient.ToolChatResponse("预生成答案", 10, 20));
         assertDoesNotThrow(() -> gateway.prewarmHotQuestions());
         assertEquals(LlmGateway.HOT_QUESTIONS.size(), 5);
     }

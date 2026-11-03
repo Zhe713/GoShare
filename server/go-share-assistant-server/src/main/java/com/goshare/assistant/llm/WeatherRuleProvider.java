@@ -95,12 +95,19 @@ public class WeatherRuleProvider {
         }
     }
 
-    /** 提取城市：优先问句命中；其次从历史用户消息（倒序）回捞；都没有返回 null（由调用方诚实反问） */
+    /** 提取城市：优先问句命中（按出现位置取第一个，避免「邯郸今天天气和北京…」误取北京）；其次从历史用户消息（倒序）回捞；都没有返回 null（由调用方诚实反问） */
     private String extractCity(String question, List<Map<String, String>> history) {
+        String best = null;
+        int bestIdx = Integer.MAX_VALUE;
         for (String city : CITIES) {
-            if (question.contains(city)) {
-                return city;
+            int idx = question.indexOf(city);
+            if (idx >= 0 && idx < bestIdx) {
+                bestIdx = idx;
+                best = city;
             }
+        }
+        if (best != null) {
+            return best;
         }
         if (history != null) {
             for (int i = history.size() - 1; i >= 0; i--) {

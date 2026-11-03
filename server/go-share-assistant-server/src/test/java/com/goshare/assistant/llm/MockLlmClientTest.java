@@ -4,6 +4,8 @@ import com.goshare.assistant.config.LlmProperties;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 
+import java.util.List;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -55,5 +57,31 @@ class MockLlmClientTest {
     void emptyPromptZeroTokens() {
         LlmClient.LlmResponse resp = client.call("", LlmClient.Tier.SMALL);
         assertEquals(0, resp.inputTokens());
+    }
+
+    @Test
+    void chatReturnsMockTextWithoutToolCalls() {
+        List<LlmClient.ToolMessage> msgs = List.of(
+                new LlmClient.ToolMessage("system", "今天是2026年11月3日，周二。"),
+                new LlmClient.ToolMessage("user", "农历"));
+        LlmClient.ToolChatResponse resp = client.chat(msgs, List.of(), LlmClient.Tier.SMALL);
+        assertTrue(resp.text().contains("农历"));
+        assertTrue(resp.toolCalls().isEmpty());
+        assertTrue(resp.inputTokens() > 0);
+        assertTrue(resp.outputTokens() > 0);
+    }
+
+    @Test
+    void chatLargeTierReturnsMockOutputTemplate() {
+        LlmClient.ToolChatResponse resp = client.chat(
+                List.of(new LlmClient.ToolMessage("user", "写个文案")), List.of(), LlmClient.Tier.LARGE);
+        assertTrue(resp.text().contains("【大模型·mock 输出】"));
+    }
+
+    @Test
+    void chatWithoutUserMessageFallsBackToPlaceholder() {
+        LlmClient.ToolChatResponse resp = client.chat(
+                List.of(new LlmClient.ToolMessage("system", "s")), List.of(), LlmClient.Tier.SMALL);
+        assertTrue(resp.text().contains("（无用户消息）"));
     }
 }
