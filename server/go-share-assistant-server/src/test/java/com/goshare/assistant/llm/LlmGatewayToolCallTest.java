@@ -114,4 +114,58 @@ class LlmGatewayToolCallTest {
         assertEquals("天气服务暂时不可用，请稍后再试。", result.getText());
         verify(toolRegistry).execute("get_weather", "{\"city\":\"邯郸\"}");
     }
+
+    @Test
+    void hallucinationOutputIsBlockedThenGuardedRetryCallsTool() {
+        // 模型首轮未调工具、直接编造「2027年春节是2月1日」→ 输出护栏拦截 → 重试轮调工具取真数据 → 收尾
+        when(toolRegistry.toOpenAiTools()).thenReturn(List.of());
+        java.util.concurrent.atomic.AtomicInteger calls = new java.util.concurrent.atomic.AtomicInteger();
+        when(llmClient.chat(anyList(), anyList(), any())).thenAnswer(inv -> {
+            int n = calls.incrementAndGet();
+            if (n == 1) {
+                return new LlmClient.ToolChatResponse("2027年春节是2月1日", 10, 5);
+            }
+            if (n == 2) {
+                return new LlmClient.ToolChatResponse(null,
+                        List.of(new LlmClient.ToolCall("call_g", "get_festival_countdown",
+                                "{\"festival\":\"春节\"}")), 12, 4);
+            }
+            return new LlmClient.ToolChatResponse("距离农历丁未（羊）年春节（2027年2月6日）还有 95 天。", 14, 6);
+        });
+        when(toolRegistry.execute("get_festival_countdown", "{\"festival\":\"春节\"}"))
+                .thenReturn("距离农历丁未（羊）年春节（2027年2月6日）还有 95 天。");
+
+        LlmResult result = gateway.ask("FAQ天气", "离过年还有几天", LlmClient.Tier.SMALL);
+
+        assertEquals("距离农历丁未（羊）年春节（2027年2月6日）还有 95 天。", result.getText());
+        verify(toolRegistry).execute("get_festival_countdown", "{\"festival\":\"春节\"}");
+        verify(llmClient, times(3)).chat(anyList(), anyList(), any());
+    }
+
+    @Test
+    void hallucinationPersistsAfterGuardDegradesHonestly() {
+        // 护栏重试轮模型仍不调工具、继续输出日期硬断言 → 如实降级，绝不把编造内容返回给用户
+        when(toolRegistry.toOpenAiTools()).thenReturn(List.of());
+        when(llmClient.chat(anyList(), anyList(), any()))
+                .thenReturn(new LlmClient.ToolChatResponse("2027年春节是2月1日，距今还有90天", 8, 4));
+
+        LlmResult result = gateway.ask("FAQ天气", "离过年还有几天", LlmClient.Tier.SMALL);
+
+        assertEquals("抱歉，这项数据我暂时无法确认，请换个问法试试。", result.getText());
+        verify(llmClient, times(2)).chat(anyList(), anyList(), any());
+        verify(toolRegistry, never()).execute(anyString(), anyString());
+    }
+
+    @Test
+    void deterministicQuestionWithHonestRefusalNotBlocked() {
+        // 确定性域问题但模型如实拒绝（无硬断言）→ 护栏不误伤
+        when(toolRegistry.toOpenAiTools()).thenReturn(List.of());
+        when(llmClient.chat(anyList(), anyList(), any()))
+                .thenReturn(new LlmClient.ToolChatResponse("抱歉，我暂时查不到春节相关的具体日期信息。", 9, 5));
+
+        LlmResult result = gateway.ask("FAQ天气", "离过年还有几天", LlmClient.Tier.SMALL);
+
+        assertEquals("抱歉，我暂时查不到春节相关的具体日期信息。", result.getText());
+        verify(llmClient, times(1)).chat(anyList(), anyList(), any());
+    }
 }

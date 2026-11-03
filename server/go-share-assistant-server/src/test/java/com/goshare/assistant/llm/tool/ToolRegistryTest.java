@@ -28,18 +28,54 @@ class ToolRegistryTest {
                 new TripSearchTool(trip, objectMapper),
                 new WeatherTool(weather, objectMapper),
                 new LunarTool(new LunarService(), objectMapper),
-                new CurrentTimeTool(new TimeRuleProvider())
+                new CurrentTimeTool(new TimeRuleProvider()),
+                new FestivalCountdownTool(new LunarService(), objectMapper),
+                new YearInfoTool(new LunarService(), objectMapper),
+                new JieQiTool(new LunarService(), objectMapper),
+                new DateCalcTool(objectMapper)
         ));
     }
 
     @Test
-    void toOpenAiToolsContainsAllFourTools() {
+    void toOpenAiToolsContainsAllEightTools() {
         ToolRegistry registry = registry(mock(TripRuleProvider.class), mock(WeatherRuleProvider.class));
         List<Map<String, Object>> tools = registry.toOpenAiTools();
-        assertEquals(4, tools.size());
+        assertEquals(8, tools.size());
         Map<String, Object> first = tools.get(0);
         assertEquals("function", first.get("type"));
         assertEquals("search_trips", ((Map<?, ?>) first.get("function")).get("name"));
+    }
+
+    @Test
+    void executesFestivalCountdownWithRealCalendar() {
+        ToolRegistry registry = registry(mock(TripRuleProvider.class), mock(WeatherRuleProvider.class));
+        String result = registry.execute("get_festival_countdown", "{\"festival\":\"春节\"}");
+        assertTrue(result.contains("春节"), result);
+        assertTrue(result.contains("2027年2月6日"), result);
+        assertTrue(result.contains("还有 95 天"), result);
+    }
+
+    @Test
+    void executesYearInfoWithRealCalendar() {
+        ToolRegistry registry = registry(mock(TripRuleProvider.class), mock(WeatherRuleProvider.class));
+        String result = registry.execute("get_year_info", "{}");
+        assertTrue(result.contains("丙午（马）年"), result);
+    }
+
+    @Test
+    void executesJieQiWithRealCalendar() {
+        ToolRegistry registry = registry(mock(TripRuleProvider.class), mock(WeatherRuleProvider.class));
+        String result = registry.execute("get_jieqi_date", "{\"jieqi\":\"立春\"}");
+        assertTrue(result.contains("立春"), result);
+        assertTrue(result.endsWith("日。"), result);
+    }
+
+    @Test
+    void executesDateCalcWeekdayDeterministically() {
+        ToolRegistry registry = registry(mock(TripRuleProvider.class), mock(WeatherRuleProvider.class));
+        // 2026-11-03 是周二，42 天后 2026-12-15 仍是周二（模型曾口头算成周一）
+        String result = registry.execute("get_date_calc", "{\"date\":\"2026-12-15\"}");
+        assertEquals("2026年12月15日，周二。（距今天还有 42 天）", result);
     }
 
     @Test

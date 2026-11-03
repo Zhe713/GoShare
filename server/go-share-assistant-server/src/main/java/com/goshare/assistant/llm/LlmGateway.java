@@ -18,6 +18,7 @@ import java.time.LocalDate;
 import java.util.ArrayList;
 import java.util.List;
 import java.util.Map;
+import java.util.regex.Pattern;
 
 /**
  * LLM 统一网关：省 token 四关卡 + 全量记账
@@ -40,6 +41,24 @@ public class LlmGateway {
 
     /** 工具绑定约束：模型只能基于工具返回的真实数据作答，无工具不答（结构性去幻觉核心） */
     public static final String TOOL_BINDING_RULE = "涉及行程班次、天气、农历、当前时间等需要实时数据的问题，你必须先调用提供的工具获取真实数据后再回答，禁止编造或凭记忆猜测数据。若没有可用工具或工具返回为空，必须明确告知用户“我暂时查不到这项数据”，绝不自行编造。";
+
+    /** 输出护栏（结构性去幻觉第二道防线，不枚举问法）：模型未调用任何工具、却输出确定性硬断言（具体日期/农历/倒计时天数/价格/余座/星期）时判定疑似幻觉 */
+    private static final Pattern HARD_ASSERTION = Pattern.compile(
+            "\\d{4}\\s*年.{0,12}?\\d{1,2}\\s*月\\s*\\d{1,2}\\s*日"
+                    + "|农历[一二三四五六七八九十]月[一二三四五六七八九十廿卅]+"
+                    + "|还有\\s*\\d+\\s*天|再过\\s*\\d+\\s*天"
+                    + "|\\d+\\s*元|余\\s*\\d+\\s*座"
+                    + "|星期[一二三四五六日天]");
+
+    /** 确定性知识问题域：命中后模型未调工具且输出硬断言即触发护栏 */
+    private static final Pattern DETERMINISTIC_DOMAIN = Pattern.compile(
+            "几号|几月|哪年|农历|阴历|黄历|春节|过年|除夕|端午|中秋|元宵|重阳|七夕|腊八|节日|节气|几点|几点钟|时间|天气|班次|行程|价格|多少钱|余座|几天|多少天|日期|今天周|星期");
+
+    /** 护栏重试提示：强制工具取数或如实拒绝 */
+    private static final String HALLUCINATION_GUARD = "\n【防幻觉强制规则】你的上一条回复包含未经工具确认的日期/数字信息，已判定为不可信。涉及日期、农历、节日、节气、时间、天气、班次、价格、余座等确定性信息，必须调用对应工具取数后再回答；若没有可用工具，只能回复「抱歉，这项数据我暂时无法确认，请换个问法试试。」，绝不允许编造任何日期、数字或事实。";
+
+    /** 护栏最终降级文案（与正常降级区分，便于日志识别） */
+    private static final String UNVERIFIED_FALLBACK = "抱歉，这项数据我暂时无法确认，请换个问法试试。";
 
     /** 工具调用最大轮数（防模型死循环；每轮至少执行一次工具取数） */
     private static final int MAX_TOOL_ROUNDS = 3;
@@ -191,7 +210,7 @@ public class LlmGateway {
             }
             record(bizType, tier, ruleHash, 0, 0, (int) (System.currentTimeMillis() - start), false, true);
             log.info("[llm-gateway] 关卡2农历命中 biz={} q={}", bizType, question);
-            return LlmResult.of(lunarAnswer, false, "小模型(农历)", true, 0, 0, (int) (System.currentTimeMillis() - start));
+            return LlmResult.of(lunarAnswer, false, "小模型(历法)", true, 0, 0, (int) (System.currentTimeMillis() - start));
         }
 
         // 关卡2：小模型先答（规则意图零调用，未触碰大模型）
@@ -245,6 +264,33 @@ public class LlmGateway {
         String answer = (resp == null || resp.text() == null || resp.text().isBlank())
                 ? "抱歉，暂时无法查询到这项数据，请换个问法试试。"
                 : resp.text();
+
+        // —— 输出护栏（结构性去幻觉第二道防线，不枚举问法）——
+        // 规则/工具均未命中时模型自由生成：若它未经任何工具调用就输出具体日期、农历、倒计时天数、
+        // 价格、余座、星期等确定性硬断言，判定为疑似幻觉，强制带护栏重试一轮；
+        // 重试仍无工具支撑（或继续输出硬断言）则如实降级，绝不把未经证实的数字返回给用户。
+        if (toolRounds == 0 && DETERMINISTIC_DOMAIN.matcher(question).find()
+                && HARD_ASSERTION.matcher(answer).find()) {
+            log.warn("[llm-gateway] 输出护栏拦截疑似幻觉 q={} ans={}", question, answer);
+            messages.add(new LlmClient.ToolMessage("system", HALLUCINATION_GUARD));
+            LlmClient.ToolChatResponse guarded = llmClient.chat(messages, tools, tier);
+            if (!guarded.toolCalls().isEmpty()) {
+                toolRounds++;
+                messages.add(LlmClient.ToolMessage.assistantToolCalls(guarded.toolCalls()));
+                for (LlmClient.ToolCall call : guarded.toolCalls()) {
+                    messages.add(LlmClient.ToolMessage.toolResult(call.id(),
+                            toolRegistry.execute(call.name(), call.arguments())));
+                }
+                LlmClient.ToolChatResponse final2 = llmClient.chat(messages, tools, tier);
+                answer = (final2.text() == null || final2.text().isBlank()) ? UNVERIFIED_FALLBACK : final2.text();
+            } else if (guarded.text() != null && !guarded.text().isBlank()
+                    && !HARD_ASSERTION.matcher(guarded.text()).find()) {
+                answer = guarded.text();
+            } else {
+                answer = UNVERIFIED_FALLBACK;
+            }
+            log.info("[llm-gateway] 护栏处理完成 q={} final={}", question, answer);
+        }
         try {
             redisTemplate.opsForValue().set(contextKey, answer, CACHE_TTL);
         } catch (Exception e) {

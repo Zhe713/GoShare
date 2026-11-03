@@ -92,7 +92,7 @@ class LlmGatewayTest {
 
         assertFalse(result.isFromCache());
         assertTrue(result.isGateSkipped());
-        assertEquals("小模型(农历)", result.getModelName());
+        assertEquals("小模型(历法)", result.getModelName());
         assertEquals("今天是农历丙午（马）年九月廿五。", result.getText());
         verify(llmClient, never()).chat(anyList(), anyList(), any());
     }

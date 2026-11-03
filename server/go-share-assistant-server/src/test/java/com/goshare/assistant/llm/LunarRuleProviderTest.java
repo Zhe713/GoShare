@@ -27,6 +27,39 @@ class LunarRuleProviderTest {
     }
 
     @Test
+    void springFestivalQuestionReturnsRealCountdown() {
+        // 历史幻觉：模型答「2027年春节是2月1日」；规则必须给确定性倒计时 2027-02-06
+        String answer = provider.maybeAnswer("离过年还有几天");
+        assertNotNull(answer);
+        assertTrue(answer.contains("春节"));
+        assertTrue(answer.contains("2027年2月6日"), answer);
+        assertTrue(answer.contains("还有 95 天"), answer);
+    }
+
+    @Test
+    void yearQuestionReturnsGanZhi() {
+        String answer = provider.maybeAnswer("今年是什么年");
+        assertNotNull(answer);
+        assertTrue(answer.contains("丙午（马）年"), answer);
+    }
+
+    @Test
+    void festivalQuestionReturnsCountdown() {
+        String answer = provider.maybeAnswer("端午节什么时候");
+        assertNotNull(answer);
+        assertTrue(answer.contains("端午节"), answer);
+        assertTrue(answer.contains("还有"), answer);
+    }
+
+    @Test
+    void jieQiQuestionReturnsSolarDate() {
+        String answer = provider.maybeAnswer("2027年立春是哪天");
+        assertNotNull(answer);
+        assertTrue(answer.contains("立春"), answer);
+        assertTrue(answer.contains("日。"), answer);
+    }
+
+    @Test
     void nonLunarQuestionReturnsNull() {
         assertNull(provider.maybeAnswer("北京到邯郸有车吗"));
         assertNull(provider.maybeAnswer("现在几点了"));
