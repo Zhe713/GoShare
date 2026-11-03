@@ -1,6 +1,6 @@
 <script setup lang="ts">
-/** 券包：领券中心（后端模板动态加载）+ 我的券（GCouponCard 三态演示） */
-import { computed, onMounted, ref } from 'vue'
+/** 券包：领券中心（后端模板动态加载，限量/秒杀倒计时实时）+ 我的券（GCouponCard 三态演示） */
+import { computed, onMounted, onUnmounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { GNavBar, GTabBar, GCouponCard, GSkeleton, GEmpty, GToast } from '@/g-ui'
 import { myCoupons, claimCoupon, couponTemplates, type Coupon, type CouponTemplate } from '@/api/user'
@@ -14,6 +14,9 @@ const toast = ref(false)
 const toastMsg = ref('')
 /** 已领取过的模板 ID（领券中心按钮据此置灰，避免「已领完仍可点」） */
 const claimedIds = ref<Set<number>>(new Set())
+/** 当前时间（每 30 秒刷新，驱动秒杀倒计时实时更新） */
+const now = ref(Date.now())
+let timer: number | undefined
 
 async function load() {
   loading.value = true
@@ -26,7 +29,17 @@ async function load() {
     loading.value = false
   }
 }
-onMounted(load)
+
+onMounted(() => {
+  load()
+  timer = window.setInterval(() => {
+    now.value = Date.now()
+  }, 30_000)
+})
+
+onUnmounted(() => {
+  if (timer) window.clearInterval(timer)
+})
 
 async function claim(templateId: number) {
   try {
@@ -40,7 +53,21 @@ async function claim(templateId: number) {
   }
 }
 
-/** 模板 → GCouponCard 展示（可领/已领取/已抢完三态 + 秒杀限量信息 + 折券单位） */
+/** 秒杀剩余时间（实时）：「距结束 X天X小时X分」/「已结束」 */
+function remainText(endTime: string | null | undefined): string {
+  if (!endTime) return '已结束'
+  const end = new Date(endTime).getTime()
+  const diff = end - now.value
+  if (diff <= 0) return '已结束'
+  const days = Math.floor(diff / 86_400_000)
+  const hours = Math.floor((diff % 86_400_000) / 3_600_000)
+  const mins = Math.floor((diff % 3_600_000) / 60_000)
+  if (days > 0) return `距结束 ${days}天${hours}小时`
+  if (hours > 0) return `距结束 ${hours}小时${mins}分`
+  return `距结束 ${mins}分`
+}
+
+/** 模板 → GCouponCard 展示（可领/已领取/已抢完三态 + 限量秒杀实时信息 + 有效期） */
 function toCard(t: CouponTemplate) {
   const claimed = claimedIds.value.has(t.id)
   const soldOut = t.receivedCount >= t.totalCount
@@ -50,6 +77,7 @@ function toCard(t: CouponTemplate) {
   const amount = isDiscount ? Number(t.discountValue) / 10 : Number(t.discountValue)
   const minSpend = Number(t.threshold)
   const isFlash = name.includes('秒杀') || name.includes('限量')
+  const limited = t.totalCount > 0
   const desc = claimed
     ? '已领取，每人限领一张'
     : soldOut
@@ -59,6 +87,14 @@ function toCard(t: CouponTemplate) {
         : minSpend > 0
           ? `满${minSpend}元可用`
           : '无门槛'
+  const expire = isFlash
+    ? `截止 ${remainText(t.endTime)}`
+    : `领取后 ${t.expireDays ?? 7} 天内有效`
+  const soldInfo = limited
+    ? `${isFlash ? '限时秒杀 · ' : ''}限量 ${t.totalCount} 张 · 已抢 ${t.receivedCount} 张`
+    : isFlash
+      ? `限时秒杀 · 已抢 ${t.receivedCount} 张`
+      : ''
   return {
     id: t.id,
     name,
@@ -67,7 +103,8 @@ function toCard(t: CouponTemplate) {
     desc,
     status: status as 'available' | 'claimed' | 'soldout' | 'used',
     unit: (isDiscount ? '折' : '¥') as '折' | '¥',
-    soldInfo: isFlash ? `限量 ${t.totalCount} 张 · 已抢 ${t.receivedCount} 张` : '',
+    expire,
+    soldInfo,
   }
 }
 

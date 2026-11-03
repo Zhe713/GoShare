@@ -39,9 +39,10 @@ public class HttpLlmClient implements LlmClient {
     public LlmResponse call(String prompt, Tier tier) {
         String model = tier == Tier.SMALL ? properties.getModel() : properties.getModelLarge();
         // 把系统前缀与用户问题拆成独立角色消息（避免 qwen 将 system 内“用户：…”误判为乱码）
+        // 用最后一次「用户：」切分：历史上下文留在 system，最新问题作为 user 消息
         String system = prompt;
         String user = "请回答用户问题。";
-        int idx = prompt.indexOf("\n用户：");
+        int idx = prompt.lastIndexOf("\n用户：");
         if (idx > 0) {
             system = prompt.substring(0, idx);
             user = prompt.substring(idx + 4);

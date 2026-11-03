@@ -11,8 +11,11 @@ import org.springframework.stereotype.Component;
 import org.springframework.util.DigestUtils;
 
 import java.nio.charset.StandardCharsets;
+import java.time.DayOfWeek;
 import java.time.Duration;
+import java.time.LocalDate;
 import java.util.List;
+import java.util.Map;
 
 /**
  * LLM 统一网关：省 token 四关卡 + 全量记账
@@ -33,8 +36,14 @@ public class LlmGateway {
     /** 固定系统前缀：所有 prompt 以此开头（厂商缓存复用 + 防注入） */
     public static final String SYSTEM_PREFIX = "你是 GoShare 顺风拼车平台的出行助手。GoShare 是演示用顺风拼车平台，示例运营线路以中国河北省及周边城市之间的城际拼车为主（如石家庄、邯郸、保定、北京等城市）。回答用户出行问题时：1）先说明平台以这些示例城市运营；2）引导用户提供出发地、目的地与出行日期，以便查询系统内真实可订线路；3）绝不编造平台未覆盖的运营区域、公司背景、具体价格、班次时间或政策条款；4）凡系统数据无法确定的业务信息，一律提示用户查询具体线路，不自行脑补。回复风格要求：像真人客服一样简洁口语化，一次回复不超过 4 句话；不使用 emoji、感叹号堆砌、营销腔和“重磅/超值/震撼”等话术；不知道就说不知道，不硬凑。";
 
-    /** 答案缓存 TTL：12 小时（与夜间预生成周期匹配，每晚重生成） */
+    /** 答案缓存 TTL：12 小时（与夜间预生成周期匹配，每晚重生成）；天气答案实时性要求高，单独 15 分钟 */
     private static final Duration CACHE_TTL = Duration.ofHours(12);
+
+    /** 天气答案缓存 TTL：15 分钟（保证天气实时更新，不把旧天气当新天气答出去） */
+    private static final Duration WEATHER_CACHE_TTL = Duration.ofMinutes(15);
+
+    /** 星期中文 */
+    private static final String[] WEEK_CN = {"周一", "周二", "周三", "周四", "周五", "周六", "周日"};
 
     private final LlmClient llmClient;
     private final StringRedisTemplate redisTemplate;
@@ -43,24 +52,55 @@ public class LlmGateway {
     private final WeatherRuleProvider weatherRuleProvider;
 
     /**
-     * 统一入口
+     * 统一入口（无历史上下文的便捷重载）
      *
      * @param bizType  业务类型：A1语义搜索 / B1工单摘要 / A2取消挽留 / FAQ天气
      * @param question 用户问题（原始表述，无需带前缀）
      * @param tier     模型档位（规则意图走 SMALL，生成类走 LARGE）
      */
     public LlmResult ask(String bizType, String question, LlmClient.Tier tier) {
+        return ask(bizType, question, tier, List.of());
+    }
+
+    /**
+     * 统一入口（带多轮上下文）
+     *
+     * @param history 历史对话 [{role: user|assistant, content}]，用于上下文理解；可为空
+     */
+    public LlmResult ask(String bizType, String question, LlmClient.Tier tier, List<Map<String, String>> history) {
         long start = System.currentTimeMillis();
-        // 关卡3：固定前缀（强制拼接，保证厂商缓存 key 稳定）
-        String prompt = SYSTEM_PREFIX + "\n用户：" + question;
-        String hash = DigestUtils.md5DigestAsHex(prompt.getBytes(StandardCharsets.UTF_8));
-        String cacheKey = cacheKey(hash);
+        // 关卡3：固定前缀（强制拼接，保证厂商缓存 key 稳定）+ 今日日期 + 多轮上下文
+        // 日期写入 prompt：模型能感知「今天几号/星期几」；历史拼入后上下文连贯，不再重复要出发地/日期
+        StringBuilder prompt = new StringBuilder(todayLine()).append(SYSTEM_PREFIX);
+        if (history != null) {
+            for (Map<String, String> h : history) {
+                String role = h.getOrDefault("role", "user");
+                String content = h.getOrDefault("content", "");
+                if (content == null || content.isBlank()) {
+                    continue;
+                }
+                prompt.append('\n').append("user".equals(role) ? "用户：" : "助手：").append(content);
+            }
+        }
+        prompt.append("\n用户：").append(question);
+        String fullPrompt = prompt.toString();
+
+        // 双缓存：LLM 答案按「日期+前缀+历史+问题」缓存（上下文不同不串答案）；
+        // 规则/天气答案与上下文无关，按「日期+前缀+问题」缓存 → 任何会话里重复问同一 FAQ 都命中关卡1，零模型调用
+        String contextHash = DigestUtils.md5DigestAsHex(fullPrompt.getBytes(StandardCharsets.UTF_8));
+        String rulePrompt = todayLine() + SYSTEM_PREFIX + "\n用户：" + question;
+        String ruleHash = DigestUtils.md5DigestAsHex(rulePrompt.getBytes(StandardCharsets.UTF_8));
+        String contextKey = cacheKey(contextHash);
+        String ruleKey = cacheKey(ruleHash);
 
         // 关卡1：答案缓存（带数据版本号，版本 +1 后旧答案自动作废；Redis 不可用时降级跳过，不影响主流程）
         try {
-            String cached = redisTemplate.opsForValue().get(cacheKey);
+            String cached = redisTemplate.opsForValue().get(contextKey);
+            if (cached == null) {
+                cached = redisTemplate.opsForValue().get(ruleKey);
+            }
             if (cached != null) {
-                record(bizType, tier, hash, 0, 0, (int) (System.currentTimeMillis() - start), true, false);
+                record(bizType, tier, contextHash, 0, 0, (int) (System.currentTimeMillis() - start), true, false);
                 log.info("[llm-gateway] 关卡1缓存命中 biz={} q={}", bizType, question);
                 return LlmResult.of(cached, true, "cache", false, 0, 0, (int) (System.currentTimeMillis() - start));
             }
@@ -68,15 +108,15 @@ public class LlmGateway {
             log.warn("[llm-gateway] Redis 不可用，跳过缓存关卡: {}", e.getMessage());
         }
 
-        // 关卡2：天气意图（真实数据·零模型调用，来自 notify 天气服务）
+        // 关卡2：天气意图（真实数据·零模型调用，来自 notify 天气服务；缓存仅 15 分钟保证实时）
         String weatherAnswer = weatherRuleProvider.maybeAnswer(question);
         if (weatherAnswer != null) {
             try {
-                redisTemplate.opsForValue().set(cacheKey, weatherAnswer, CACHE_TTL);
+                redisTemplate.opsForValue().set(ruleKey, weatherAnswer, WEATHER_CACHE_TTL);
             } catch (Exception e) {
                 log.warn("[llm-gateway] 天气答案写缓存失败（不影响返回）: {}", e.getMessage());
             }
-            record(bizType, tier, hash, 0, 0, (int) (System.currentTimeMillis() - start), false, true);
+            record(bizType, tier, ruleHash, 0, 0, (int) (System.currentTimeMillis() - start), false, true);
             log.info("[llm-gateway] 关卡2天气数据命中 biz={} q={}", bizType, question);
             return LlmResult.of(weatherAnswer, false, "小模型(天气)", true, 0, 0, (int) (System.currentTimeMillis() - start));
         }
@@ -85,28 +125,36 @@ public class LlmGateway {
         String ruleAnswer = RuleAnswerProvider.maybeAnswer(question);
         if (ruleAnswer != null) {
             try {
-                redisTemplate.opsForValue().set(cacheKey, ruleAnswer, CACHE_TTL);
+                redisTemplate.opsForValue().set(ruleKey, ruleAnswer, CACHE_TTL);
             } catch (Exception e) {
                 log.warn("[llm-gateway] 规则答案写缓存失败（不影响返回）: {}", e.getMessage());
             }
-            record(bizType, tier, hash, 0, 0, (int) (System.currentTimeMillis() - start), false, true);
+            record(bizType, tier, ruleHash, 0, 0, (int) (System.currentTimeMillis() - start), false, true);
             log.info("[llm-gateway] 关卡2小模型规则命中 biz={} q={}", bizType, question);
             return LlmResult.of(ruleAnswer, false, "小模型(规则)", true, 0, 0, (int) (System.currentTimeMillis() - start));
         }
 
-        // 调模型（大模型档，mock 零成本 / http 真实 API）
-        LlmClient.LlmResponse resp = llmClient.call(prompt, tier);
+        // 调模型（大模型档，mock 零成本 / http 真实 API）；答案带上下文缓存（不同历史不串答案）
+        LlmClient.LlmResponse resp = llmClient.call(fullPrompt, tier);
         try {
-            redisTemplate.opsForValue().set(cacheKey, resp.text(), CACHE_TTL);
+            redisTemplate.opsForValue().set(contextKey, resp.text(), CACHE_TTL);
         } catch (Exception e) {
             log.warn("[llm-gateway] 答案写缓存失败（不影响返回）: {}", e.getMessage());
         }
         int elapsed = (int) (System.currentTimeMillis() - start);
-        record(bizType, tier, hash, resp.inputTokens(), resp.outputTokens(), elapsed, false, false);
+        record(bizType, tier, contextHash, resp.inputTokens(), resp.outputTokens(), elapsed, false, false);
         log.info("[llm-gateway] 调用模型 biz={} q={} model={} in={} out={}",
                 bizType, question, tier, resp.inputTokens(), resp.outputTokens());
         return LlmResult.of(resp.text(), false, tier == LlmClient.Tier.SMALL ? "小模型" : "大模型",
                 false, resp.inputTokens(), resp.outputTokens(), elapsed);
+    }
+
+    /** 今日日期行：让模型感知「今天几号、星期几」（如「今天是2026年11月3日，周二。」） */
+    private String todayLine() {
+        LocalDate d = LocalDate.now();
+        DayOfWeek dow = d.getDayOfWeek();
+        return "今天是" + d.getYear() + "年" + d.getMonthValue() + "月" + d.getDayOfMonth()
+                + "日，" + WEEK_CN[dow.getValue() - 1] + "。";
     }
 
     /** 关卡4：夜间预生成热点问答（凌晨 3 点执行；也可通过运维接口手动触发） */

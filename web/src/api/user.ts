@@ -52,6 +52,9 @@ export interface CouponTemplate {
   discountValue: number
   totalCount: number
   receivedCount: number
+  startTime: string
+  endTime: string
+  expireDays: number
   status: number
 }
 
@@ -59,13 +62,16 @@ export function couponTemplates(): Promise<CouponTemplate[]> {
   return apiGet<CouponTemplate[]>('/coupon/template/list')
 }
 
-/** AI 助手通用问答（走省 token 四关卡） */
-export function assistantChat(text: string): Promise<{
+/** AI 助手通用问答（走省 token 四关卡；history 为多轮上下文 [{role, content}]，可为空） */
+export function assistantChat(
+  text: string,
+  history?: { role: string; content: string }[],
+): Promise<{
   answer: string
   fromCache: boolean
   modelName: string
 }> {
-  return apiPost<{ answer: string; fromCache: boolean; modelName: string }>('/assistant/chat', { text })
+  return apiPost<{ answer: string; fromCache: boolean; modelName: string }>('/assistant/chat', { text, history })
 }
 
 /** 天气 */

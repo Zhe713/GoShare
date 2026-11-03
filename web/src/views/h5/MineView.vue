@@ -77,9 +77,9 @@ function statusText(s: string) {
       </div>
     </div>
 
-    <h3 v-if="orders.length" class="mine__section">最近订单</h3>
+    <h3 v-if="orders.length" class="mine__section">最近订单 · 共 {{ orders.length }} 单</h3>
     <div v-if="orders.length" class="mine__orders">
-      <GCard v-for="o in orders.slice(0, 3)" :key="o.orderNo" class="mine__order" @click="router.push(`/pay/${o.orderNo}`)">
+      <GCard v-for="o in orders" :key="o.orderNo" class="mine__order" @click="router.push(`/pay/${o.orderNo}`)">
         <div class="mine__order-main">
           <p class="mine__order-route">
             <template v-if="o.tripFromCity && o.tripToCity">{{ o.tripFromCity }} → {{ o.tripToCity }}</template>

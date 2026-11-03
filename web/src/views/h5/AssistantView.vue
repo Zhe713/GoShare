@@ -30,7 +30,11 @@ async function send() {
   text.value = ''
   sending.value = true
   try {
-    const r = await assistantChat(q)
+    // 多轮上下文：把当前问题之前的最近 8 条对话传给后端，模型据此理解前文（不再重复要出发地/日期）
+    const history = messages.value
+      .slice(Math.max(0, messages.value.length - 9), -1)
+      .map((m) => ({ role: m.role, content: m.text }))
+    const r = await assistantChat(q, history)
     const meta = r.fromCache
       ? '缓存命中（关卡1）· 零模型调用'
       : r.modelName.includes('规则')

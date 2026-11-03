@@ -17,6 +17,16 @@ const showPicker = ref(false)
 const pickFrom = ref('石家庄')
 const pickTo = ref('北京')
 
+/** 热门线路（均为系统内已有未来班次的真实线路，点击直达有行程可看） */
+const hotRoutes = [
+  { from: '石家庄', to: '北京' },
+  { from: '邯郸', to: '石家庄' },
+  { from: '石家庄', to: '邯郸' },
+  { from: '邯郸', to: '北京' },
+  { from: '北京', to: '石家庄' },
+  { from: '保定', to: '北京' },
+]
+
 async function load() {
   loading.value = true
   error.value = ''
@@ -85,6 +95,16 @@ function switchRoute() {
     <GSheet v-model="showPicker" title="换一条线路">
       <GInput v-model="pickFrom" label="出发城市" placeholder="如：石家庄" />
       <GInput v-model="pickTo" label="到达城市" placeholder="如：北京" />
+      <p class="home__pick-hint">热门线路（有现成班次）</p>
+      <div class="home__chips">
+        <button
+          v-for="r in hotRoutes"
+          :key="`${r.from}-${r.to}`"
+          type="button"
+          class="home__chip"
+          @click="pickFrom = r.from; pickTo = r.to"
+        >{{ r.from }} → {{ r.to }}</button>
+      </div>
       <GButton type="primary" block class="home__pick-btn" @click="switchRoute">查看该线路行程</GButton>
     </GSheet>
 
@@ -177,6 +197,30 @@ function switchRoute() {
 
 .home__pick-btn {
   margin-top: var(--sp-2);
+}
+
+.home__pick-hint {
+  margin-top: var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--text-2);
+}
+
+.home__chips {
+  display: flex;
+  flex-wrap: wrap;
+  gap: var(--sp-1);
+  margin-top: var(--sp-1);
+}
+
+.home__chip {
+  padding: var(--sp-1) var(--sp-2);
+  font-size: var(--fs-12);
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 10%, var(--surface));
+  border: 1px solid var(--border);
+  border-radius: var(--r-md);
+  box-shadow: var(--highlight);
+  cursor: pointer;
 }
 
 .home__list {

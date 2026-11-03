@@ -12,10 +12,9 @@ spring:
 # 项目自定义配置
 goshare:
   weather:
-    # 天气数据源：mock（默认，内置演示数据）| http（接真实天气 API，配置 http-url/api-key）
-    mode: mock
-    http-url: https://restapi.amap.com/v3/weather/weatherInfo
-    api-key: your-key-here
+    # 天气数据源：http（真实数据·Open-Meteo 免费无 Key）| mock（内置演示数据，默认零外部依赖）
+    # 已切真实数据：城市地理编码 + 实时 forecast，WMO 天气码转中文，实时更新
+    mode: http
   notify:
     # 订单服务地址（发车提醒：取订单/行程信息）
     order-service-url: http://go-share-order-server

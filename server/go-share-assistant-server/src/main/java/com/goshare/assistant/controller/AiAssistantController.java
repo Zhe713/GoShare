@@ -40,10 +40,11 @@ public class AiAssistantController {
         return Result.success(aiSearchService.semanticSearch(req.getText()));
     }
 
-    /** 通用问答（走省 token 四关卡：答案缓存/小模型先答/固定前缀/夜间预生成） */
+    /** 通用问答（走省 token 四关卡：答案缓存/小模型先答/固定前缀/夜间预生成；支持多轮上下文 history） */
     @PostMapping("/chat")
-    public Result<Map<String, Object>> chat(@RequestBody TextReq req) {
-        LlmResult result = llmGateway.ask("FAQ天气", req.getText(), com.goshare.assistant.llm.LlmClient.Tier.SMALL);
+    public Result<Map<String, Object>> chat(@RequestBody ChatReq req) {
+        LlmResult result = llmGateway.ask("FAQ天气", req.getText(),
+                com.goshare.assistant.llm.LlmClient.Tier.SMALL, req.getHistory());
         return Result.success(Map.of(
                 "answer", result.getText(),
                 "fromCache", result.isFromCache(),
@@ -91,6 +92,14 @@ public class AiAssistantController {
     public static class TextReq {
         @NotBlank
         private String text;
+    }
+
+    @Data
+    public static class ChatReq {
+        @NotBlank
+        private String text;
+        /** 多轮上下文：[{role: user|assistant, content}]，模型据此理解前文，可为空 */
+        private List<Map<String, String>> history;
     }
 
     @Data
