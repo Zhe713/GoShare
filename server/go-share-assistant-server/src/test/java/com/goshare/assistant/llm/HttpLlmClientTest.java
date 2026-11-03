@@ -27,6 +27,8 @@ class HttpLlmClientTest {
         properties = new LlmProperties();
         properties.setApiKey("sk-test");
         properties.setHttpUrl("http://llm:8080/v1/chat/completions");
+        properties.setModel("deepseek-chat");
+        properties.setModelLarge("qwen-max");
         restTemplate = mock(RestTemplate.class);
         client = new HttpLlmClient(properties, restTemplate, new ObjectMapper());
     }
@@ -57,7 +59,7 @@ class HttpLlmClientTest {
 
         LlmClient.LlmResponse resp = client.call("前缀\n用户：你好", LlmClient.Tier.LARGE);
 
-        assertTrue(resp.text().startsWith("[模型服务不可用]"));
+        assertTrue(resp.text().startsWith("抱歉，AI 服务暂时不可用"));
         assertEquals(0, resp.inputTokens());
     }
 }

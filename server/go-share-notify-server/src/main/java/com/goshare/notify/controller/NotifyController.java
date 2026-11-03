@@ -7,6 +7,7 @@ import lombok.RequiredArgsConstructor;
 import lombok.extern.slf4j.Slf4j;
 import org.springframework.beans.factory.annotation.Value;
 import org.springframework.core.ParameterizedTypeReference;
+import org.springframework.format.annotation.DateTimeFormat;
 import org.springframework.http.HttpMethod;
 import org.springframework.web.bind.annotation.GetMapping;
 import org.springframework.web.bind.annotation.RequestMapping;
@@ -14,6 +15,7 @@ import org.springframework.web.bind.annotation.RequestParam;
 import org.springframework.web.bind.annotation.RestController;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -35,10 +37,12 @@ public class NotifyController {
     @Value("${goshare.notify.trip-service-url}")
     private String tripUrl;
 
-    /** 天气查询（发车前提醒/行程须知卡片的数据源） */
+    /** 天气查询（发车前提醒/行程须知卡片的数据源；date 可选：查指定日期天气，缺省为今天） */
     @GetMapping("/weather")
-    public Result<WeatherVO> weather(@RequestParam("city") String city) {
-        return Result.success(weatherService.query(city));
+    public Result<WeatherVO> weather(@RequestParam("city") String city,
+                                     @RequestParam(value = "date", required = false)
+                                     @DateTimeFormat(iso = DateTimeFormat.ISO.DATE) LocalDate date) {
+        return Result.success(weatherService.query(city, date));
     }
 
     /** 发车提醒：订单行程 + 出发地天气 → 人话提醒（体验功能） */

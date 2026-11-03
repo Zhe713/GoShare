@@ -9,6 +9,7 @@ import org.springframework.boot.autoconfigure.condition.ConditionalOnProperty;
 import org.springframework.stereotype.Service;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDate;
 import java.util.HashMap;
 import java.util.Map;
 
@@ -27,12 +28,12 @@ public class HttpWeatherService implements WeatherService {
     private static final String GEOCODE_URL =
             "https://geocoding-api.open-meteo.com/v1/search?name={city}&count=1&language=zh&format=json";
 
-    /** Open-Meteo 实时天气（current 实况 + daily 今日高低温；timezone=auto 按坐标自动判时区） */
+    /** Open-Meteo 实时天气（current 实况 + daily 未来 7 天高低温；timezone=auto 按坐标自动判时区） */
     private static final String FORECAST_URL =
             "https://api.open-meteo.com/v1/forecast?latitude={lat}&longitude={lon}"
                     + "&current=temperature_2m,relative_humidity_2m,apparent_temperature,weather_code,wind_speed_10m,precipitation"
                     + "&daily=weather_code,temperature_2m_max,temperature_2m_min"
-                    + "&timezone=auto&forecast_days=1";
+                    + "&timezone=auto&forecast_days=7";
 
     /** WMO 天气码 → 中文天气现象（0-99 官方码） */
     private static final Map<Integer, String> WMO = new HashMap<>();
@@ -79,6 +80,11 @@ public class HttpWeatherService implements WeatherService {
 
     @Override
     public WeatherVO query(String city) {
+        return query(city, null);
+    }
+
+    @Override
+    public WeatherVO query(String city, LocalDate date) {
         try {
             // 1. 地理编码：城市名 → 经纬度
             String geoBody = restTemplate.getForObject(GEOCODE_URL, String.class, city);
@@ -91,19 +97,42 @@ public class HttpWeatherService implements WeatherService {
                 log.warn("[weather-http] 未找到城市坐标 city={}", city);
                 return unavailable(city);
             }
-            // 2. 实时天气（current 实况 + daily 今日高低温）
+            // 2. 未来 7 天 forecast（daily 数组按当地时间从今天起排）
             String fcBody = restTemplate.getForObject(FORECAST_URL, String.class, lat, lon);
             JsonNode fc = objectMapper.readTree(fcBody);
-            JsonNode current = fc.path("current");
-            int code = current.path("weather_code").asInt(3);
-            String weather = WMO.getOrDefault(code, "未知");
-            String temp = current.path("temperature_2m").asText("--") + "℃";
-            double tempC = current.path("temperature_2m").asDouble(Double.NaN);
             JsonNode daily = fc.path("daily");
-            String tempHigh = daily.path("temperature_2m_max").path(0).asText("");
-            String tempLow = daily.path("temperature_2m_min").path(0).asText("");
-            if (!tempHigh.isBlank() && !tempLow.isBlank()) {
-                temp = temp + "（今日 " + tempLow + "~" + tempHigh + "℃）";
+            // 目标日在 daily.time 中的下标：date 为空取今天(0)，否则按时间数组精确匹配
+            int idx = 0;
+            if (date != null) {
+                String target = date.toString();
+                JsonNode times = daily.path("time");
+                for (int i = 0; i < times.size(); i++) {
+                    if (target.equals(times.path(i).asText())) {
+                        idx = i;
+                        break;
+                    }
+                }
+            }
+            int code = daily.path("weather_code").path(idx).asInt(3);
+            String weather = WMO.getOrDefault(code, "未知");
+            String tempLow = daily.path("temperature_2m_min").path(idx).asText("");
+            String tempHigh = daily.path("temperature_2m_max").path(idx).asText("");
+            String temp;
+            double tempC;
+            if (idx == 0) {
+                // 今天：实时气温 + 今日高低温
+                JsonNode current = fc.path("current");
+                code = current.path("weather_code").asInt(code);
+                weather = WMO.getOrDefault(code, weather);
+                temp = current.path("temperature_2m").asText("--") + "℃";
+                tempC = current.path("temperature_2m").asDouble(Double.NaN);
+                if (!tempHigh.isBlank() && !tempLow.isBlank()) {
+                    temp = temp + "（今日 " + tempLow + "~" + tempHigh + "℃）";
+                }
+            } else {
+                // 未来日期：当天高低温区间（无实时气温）
+                temp = tempLow + "~" + tempHigh + "℃";
+                tempC = (parseTemp(tempLow) + parseTemp(tempHigh)) / 2.0;
             }
             WeatherVO vo = new WeatherVO();
             vo.setCity(resolvedName);
@@ -112,8 +141,16 @@ public class HttpWeatherService implements WeatherService {
             vo.setAdvice(advice(code, tempC));
             return vo;
         } catch (Exception e) {
-            log.warn("[weather-http] 天气接口调用失败 city={} err={}", city, e.getMessage());
+            log.warn("[weather-http] 天气接口调用失败 city={} date={} err={}", city, date, e.getMessage());
             return unavailable(city);
+        }
+    }
+
+    private double parseTemp(String s) {
+        try {
+            return Double.parseDouble(s);
+        } catch (Exception e) {
+            return Double.NaN;
         }
     }
 

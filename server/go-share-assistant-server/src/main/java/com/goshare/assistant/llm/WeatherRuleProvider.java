@@ -8,13 +8,17 @@ import org.springframework.beans.factory.annotation.Value;
 import org.springframework.stereotype.Component;
 import org.springframework.web.client.RestTemplate;
 
+import java.time.LocalDate;
+import java.util.HashMap;
 import java.util.List;
+import java.util.Map;
 import java.util.regex.Pattern;
 
 /**
  * 天气意图规则提供器（真实数据·零模型调用）：
- * 识别「今天天气怎么样/石家庄下雨吗/冷不冷」等天气意图，
- * 提取城市后调用 notify 服务的天气接口返回真实天气（mock/http 由 notify 配置决定），
+ * 识别「今天天气怎么样/邯郸下雨吗/11.4号的天气/明天冷不冷」等天气意图，
+ * 城市优先从问句提取，缺失时从多轮上下文（历史用户消息）回捞，杜绝答错城市；
+ * 日期支持「明天/后天/X月X日/X.X/号」解析，天气接口按目标日期返回真实预报；
  * 未命中天气意图或接口异常返回 null，回落到规则/模型关卡。
  */
 @Slf4j
@@ -39,36 +43,80 @@ public class WeatherRuleProvider {
     @Value("${goshare.assistant.notify-url:http://go-share-notify-server}")
     private String notifyUrl;
 
+    /** 天气查询意图（解析结果，纯本地计算，不触发外部调用） */
+    public static class WeatherQuery {
+        public final String city;
+        public final LocalDate date;
+
+        public WeatherQuery(String city, LocalDate date) {
+            this.city = city;
+            this.date = date;
+        }
+    }
+
     /**
-     * 命中天气意图返回真实天气的人话回答，否则返回 null
+     * 解析天气意图：命中返回城市+日期（城市可空），未命中返回 null
      */
-    public String maybeAnswer(String question) {
+    public WeatherQuery resolve(String question, List<Map<String, String>> history) {
         if (!INTENT.matcher(question).find()) {
             return null;
         }
-        String city = extractCity(question);
+        return new WeatherQuery(extractCity(question, history), DateParser.parse(question));
+    }
+
+    /**
+     * 拉取真实天气并组装人话回答；城市缺失时诚实反问（不默认乱猜城市）。
+     * 接口异常返回「暂不可用」兜底，绝不返回模拟数据。
+     */
+    public String fetch(WeatherQuery wq) {
+        String city = wq.city;
+        if (city == null) {
+            return "您想问哪个城市的天气呢？比如石家庄、邯郸、保定、北京~";
+        }
         try {
-            // 模板参数传 city：RestTemplate 负责正确 URL 编码（避免中文二次编码导致城市匹配失败）
+            // 模板参数传 city/date：RestTemplate 负责正确 URL 编码（避免中文二次编码导致城市匹配失败）
+            Map<String, String> params = new HashMap<>();
+            params.put("city", city);
             String url = notifyUrl + "/api/notify/weather?city={city}";
-            String body = restTemplate.getForObject(url, String.class, city);
+            if (wq.date != null) {
+                params.put("date", wq.date.toString());
+                url += "&date={date}";
+            }
+            String body = restTemplate.getForObject(url, String.class, params);
             JsonNode data = objectMapper.readTree(body).path("data");
             String weather = data.path("weather").asText("未知");
             String temperature = data.path("temperature").asText("--");
             String advice = data.path("advice").asText("");
-            return String.format("【%s今日天气】%s，%s。%s", city, weather, temperature, advice);
+            String label = DateParser.label(wq.date);
+            return String.format("【%s%s天气】%s，%s。%s", city, label, weather, temperature, advice);
         } catch (Exception e) {
             log.warn("[llm-gateway] 天气接口不可用，回落模型 city={} err={}", city, e.getMessage());
             return null;
         }
     }
 
-    /** 提取城市：优先命中「去XX/XX的天气/XX明天」等，缺省取石家庄（示例运营主城） */
-    private String extractCity(String question) {
+    /** 提取城市：优先问句命中；其次从历史用户消息（倒序）回捞；都没有返回 null（由调用方诚实反问） */
+    private String extractCity(String question, List<Map<String, String>> history) {
         for (String city : CITIES) {
             if (question.contains(city)) {
                 return city;
             }
         }
-        return "石家庄";
+        if (history != null) {
+            for (int i = history.size() - 1; i >= 0; i--) {
+                Map<String, String> h = history.get(i);
+                String role = h.getOrDefault("role", "user");
+                if (!"user".equals(role)) {
+                    continue;
+                }
+                String content = h.getOrDefault("content", "");
+                for (String city : CITIES) {
+                    if (content.contains(city)) {
+                        return city;
+                    }
+                }
+            }
+        }
+        return null;
     }
 }

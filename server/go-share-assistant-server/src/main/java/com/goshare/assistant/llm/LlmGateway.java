@@ -50,6 +50,8 @@ public class LlmGateway {
     private final LlmCallLogMapper llmCallLogMapper;
     private final LlmProperties properties;
     private final WeatherRuleProvider weatherRuleProvider;
+    private final TripRuleProvider tripRuleProvider;
+    private final TimeRuleProvider timeRuleProvider;
 
     /**
      * 统一入口（无历史上下文的便捷重载）
@@ -86,18 +88,37 @@ public class LlmGateway {
         String fullPrompt = prompt.toString();
 
         // 双缓存：LLM 答案按「日期+前缀+历史+问题」缓存（上下文不同不串答案）；
-        // 规则/天气答案与上下文无关，按「日期+前缀+问题」缓存 → 任何会话里重复问同一 FAQ 都命中关卡1，零模型调用
+        // 规则答案与上下文无关，按「日期+前缀+问题」缓存 → 任何会话里重复问同一 FAQ 都命中关卡1，零模型调用；
+        // 天气/行程答案按「日期+前缀+意图+城市+日期」缓存 → 同城同日重复问命中，跨会话不串答案
         String contextHash = DigestUtils.md5DigestAsHex(fullPrompt.getBytes(StandardCharsets.UTF_8));
         String rulePrompt = todayLine() + SYSTEM_PREFIX + "\n用户：" + question;
         String ruleHash = DigestUtils.md5DigestAsHex(rulePrompt.getBytes(StandardCharsets.UTF_8));
         String contextKey = cacheKey(contextHash);
         String ruleKey = cacheKey(ruleHash);
 
+        // 意图解析（纯本地字符串处理，不触发外部调用）：天气/行程先解析出稳定缓存键，避免命中别的会话的答案
+        WeatherRuleProvider.WeatherQuery wq = weatherRuleProvider.resolve(question, history);
+        String weatherKey = wq != null
+                ? cacheKey(DigestUtils.md5DigestAsHex((todayLine() + SYSTEM_PREFIX
+                + "#weather#" + wq.city + "#" + wq.date).getBytes(StandardCharsets.UTF_8)))
+                : null;
+        TripRuleProvider.TripQuery tq = tripRuleProvider.resolve(question, history);
+        String tripKey = tq != null && "fetch".equals(tq.mode)
+                ? cacheKey(DigestUtils.md5DigestAsHex((todayLine() + SYSTEM_PREFIX
+                + "#trip#" + tq.from + "#" + tq.to + "#" + tq.date).getBytes(StandardCharsets.UTF_8)))
+                : null;
+
         // 关卡1：答案缓存（带数据版本号，版本 +1 后旧答案自动作废；Redis 不可用时降级跳过，不影响主流程）
         try {
             String cached = redisTemplate.opsForValue().get(contextKey);
             if (cached == null) {
                 cached = redisTemplate.opsForValue().get(ruleKey);
+            }
+            if (cached == null && weatherKey != null) {
+                cached = redisTemplate.opsForValue().get(weatherKey);
+            }
+            if (cached == null && tripKey != null) {
+                cached = redisTemplate.opsForValue().get(tripKey);
             }
             if (cached != null) {
                 record(bizType, tier, contextHash, 0, 0, (int) (System.currentTimeMillis() - start), true, false);
@@ -109,16 +130,45 @@ public class LlmGateway {
         }
 
         // 关卡2：天气意图（真实数据·零模型调用，来自 notify 天气服务；缓存仅 15 分钟保证实时）
-        String weatherAnswer = weatherRuleProvider.maybeAnswer(question);
-        if (weatherAnswer != null) {
-            try {
-                redisTemplate.opsForValue().set(ruleKey, weatherAnswer, WEATHER_CACHE_TTL);
-            } catch (Exception e) {
-                log.warn("[llm-gateway] 天气答案写缓存失败（不影响返回）: {}", e.getMessage());
+        if (wq != null) {
+            String weatherAnswer = weatherRuleProvider.fetch(wq);
+            if (weatherAnswer != null) {
+                try {
+                    redisTemplate.opsForValue().set(weatherKey, weatherAnswer, WEATHER_CACHE_TTL);
+                } catch (Exception e) {
+                    log.warn("[llm-gateway] 天气答案写缓存失败（不影响返回）: {}", e.getMessage());
+                }
+                record(bizType, tier, contextHash, 0, 0, (int) (System.currentTimeMillis() - start), false, true);
+                log.info("[llm-gateway] 关卡2天气数据命中 biz={} q={} city={} date={}", bizType, question, wq.city, wq.date);
+                return LlmResult.of(weatherAnswer, false, "小模型(天气)", true, 0, 0, (int) (System.currentTimeMillis() - start));
             }
-            record(bizType, tier, ruleHash, 0, 0, (int) (System.currentTimeMillis() - start), false, true);
-            log.info("[llm-gateway] 关卡2天气数据命中 biz={} q={}", bizType, question);
-            return LlmResult.of(weatherAnswer, false, "小模型(天气)", true, 0, 0, (int) (System.currentTimeMillis() - start));
+        }
+
+        // 关卡2：行程意图（真实班次·零模型调用，杜绝幻觉班次；信息不全时诚实反问不缓存）
+        if (tq != null) {
+            if ("clarify".equals(tq.mode) || "ask".equals(tq.mode)) {
+                record(bizType, tier, contextHash, 0, 0, (int) (System.currentTimeMillis() - start), false, true);
+                return LlmResult.of(tq.hint, false, "小模型(行程)", true, 0, 0, (int) (System.currentTimeMillis() - start));
+            }
+            String tripAnswer = tripRuleProvider.fetch(tq);
+            if (tripAnswer != null) {
+                try {
+                    redisTemplate.opsForValue().set(tripKey, tripAnswer, CACHE_TTL);
+                } catch (Exception e) {
+                    log.warn("[llm-gateway] 行程答案写缓存失败（不影响返回）: {}", e.getMessage());
+                }
+                record(bizType, tier, contextHash, 0, 0, (int) (System.currentTimeMillis() - start), false, true);
+                log.info("[llm-gateway] 关卡2行程数据命中 biz={} q={} from={} to={} date={}", bizType, question, tq.from, tq.to, tq.date);
+                return LlmResult.of(tripAnswer, false, "小模型(行程)", true, 0, 0, (int) (System.currentTimeMillis() - start));
+            }
+        }
+
+        // 关卡2：实时时间（零模型调用；时间会变，不写缓存）
+        String timeAnswer = timeRuleProvider.maybeAnswer(question);
+        if (timeAnswer != null) {
+            record(bizType, tier, contextHash, 0, 0, (int) (System.currentTimeMillis() - start), false, true);
+            log.info("[llm-gateway] 关卡2时间命中 biz={} q={}", bizType, question);
+            return LlmResult.of(timeAnswer, false, "小模型(时间)", true, 0, 0, (int) (System.currentTimeMillis() - start));
         }
 
         // 关卡2：小模型先答（规则意图零调用，未触碰大模型）

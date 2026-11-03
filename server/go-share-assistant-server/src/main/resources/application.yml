@@ -38,7 +38,7 @@ goshare:
     http-url: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
     api-key: ${GOSHARE_LLM_API_KEY:REMOVED_SECRET}
     # 数据版本号：行程价格/余座/券规则变化时 +1，所有旧答案缓存自动作废（防止把旧数据答出去）
-    data-version: 3
+    data-version: 4
     # 模型档位：小模型（规则意图/轻量问答）/ 大模型（生成类）
     model: qwen-plus
     model-large: qwen-max

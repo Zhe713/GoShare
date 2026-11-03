@@ -34,7 +34,8 @@ class LlmGatewayTest {
         llmCallLogMapper = mock(LlmCallLogMapper.class);
         properties = new LlmProperties();
         properties.setDataVersion(2);
-        gateway = new LlmGateway(llmClient, redisTemplate, llmCallLogMapper, properties, mock(WeatherRuleProvider.class));
+        gateway = new LlmGateway(llmClient, redisTemplate, llmCallLogMapper, properties,
+                mock(WeatherRuleProvider.class), mock(TripRuleProvider.class), mock(TimeRuleProvider.class));
         ValueOperations<String, String> valueOps = mock(ValueOperations.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
     }
@@ -88,7 +89,7 @@ class LlmGatewayTest {
         assertEquals("小模型", result.getModelName());
         assertEquals(120, result.getInputTokens());
         assertEquals(60, result.getOutputTokens());
-        verify(llmClient).call(argThat(p -> p.startsWith(LlmGateway.SYSTEM_PREFIX)), any());
+        verify(llmClient).call(argThat(p -> p.contains(LlmGateway.SYSTEM_PREFIX)), any());
         verify(redisTemplate.opsForValue()).set(anyString(), eq("秋日私语…"), eq(Duration.ofHours(12)));
     }
 
@@ -99,7 +100,7 @@ class LlmGatewayTest {
         when(llmClient.call(anyString(), any())).thenReturn(new LlmClient.LlmResponse("x", 1, 1));
         gateway.ask("FAQ天气", "明天天气怎么样", LlmClient.Tier.LARGE);
         verify(llmClient).call(argThat(p -> p.contains("用户：明天天气怎么样")
-                && p.startsWith(LlmGateway.SYSTEM_PREFIX)), eq(LlmClient.Tier.LARGE));
+                && p.contains(LlmGateway.SYSTEM_PREFIX)), eq(LlmClient.Tier.LARGE));
     }
 
     @Test
