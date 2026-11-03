@@ -38,14 +38,22 @@ public class HttpLlmClient implements LlmClient {
     @Override
     public LlmResponse call(String prompt, Tier tier) {
         String model = tier == Tier.SMALL ? properties.getModel() : properties.getModelLarge();
+        // 把系统前缀与用户问题拆成独立角色消息（避免 qwen 将 system 内“用户：…”误判为乱码）
+        String system = prompt;
+        String user = "请回答用户问题。";
+        int idx = prompt.indexOf("\n用户：");
+        if (idx > 0) {
+            system = prompt.substring(0, idx);
+            user = prompt.substring(idx + 4);
+        }
         HttpHeaders headers = new HttpHeaders();
         headers.setContentType(MediaType.APPLICATION_JSON);
         headers.setBearerAuth(properties.getApiKey());
         Map<String, Object> body = Map.of(
                 "model", model,
                 "messages", new Object[]{
-                        Map.of("role", "system", "content", prompt),
-                        Map.of("role", "user", "content", "请生成")
+                        Map.of("role", "system", "content", system),
+                        Map.of("role", "user", "content", user)
                 }
         );
         try {

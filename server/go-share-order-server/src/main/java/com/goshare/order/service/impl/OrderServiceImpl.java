@@ -24,7 +24,9 @@ import org.springframework.dao.DuplicateKeyException;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.script.DefaultRedisScript;
 import org.springframework.http.HttpEntity;
+import org.springframework.http.HttpHeaders;
 import org.springframework.http.HttpMethod;
+import org.springframework.http.MediaType;
 import org.springframework.scheduling.annotation.Scheduled;
 import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
@@ -258,7 +260,7 @@ public class OrderServiceImpl implements OrderService {
         if (order == null) {
             throw new BusinessException(404, "订单不存在");
         }
-        return toVO(order);
+        return toVOWithTrip(order);
     }
 
     @Override
@@ -266,7 +268,7 @@ public class OrderServiceImpl implements OrderService {
         return orderMapper.selectList(new LambdaQueryWrapper<TripOrder>()
                         .eq(TripOrder::getPassengerId, passengerId)
                         .orderByDesc(TripOrder::getCreatedAt))
-                .stream().map(this::toVO).collect(Collectors.toList());
+                .stream().map(this::toVOWithTrip).collect(Collectors.toList());
     }
 
     @Override
@@ -440,8 +442,11 @@ public class OrderServiceImpl implements OrderService {
     /** 调用券服务：用券结算（锁定券并算抵扣），失败则下单失败 */
     private CouponSettleResult callCouponSettle(Long couponId, Long userId, String orderNo, BigDecimal totalPrice) {
         try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of(
-                    "couponId", couponId, "userId", userId, "orderNo", orderNo, "totalPrice", totalPrice));
+                    "couponId", couponId, "userId", userId, "orderNo", orderNo, "totalPrice", totalPrice), headers);
+            log.info("调用券服务结算 url={} couponId={} userId={} orderNo={}", marketingServiceUrl, couponId, userId, orderNo);
             Result<CouponSettleResult> result = restTemplate.exchange(
                             marketingServiceUrl + "/api/coupon/settle",
                             HttpMethod.POST, entity,
@@ -452,8 +457,10 @@ public class OrderServiceImpl implements OrderService {
             }
             return result.getData();
         } catch (BusinessException e) {
+            log.warn("券结算业务失败: {}", e.getMessage());
             throw e;
         } catch (Exception e) {
+            log.error("券结算调用异常", e);
             throw new BusinessException(500, "券服务暂不可用，请稍后重试");
         }
     }
@@ -461,8 +468,10 @@ public class OrderServiceImpl implements OrderService {
     /** 调用券服务：支付成功确认用券（尽力而为） */
     private void callCouponConfirm(Long couponId, Long userId, String orderNo) {
         try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of(
-                    "couponId", couponId, "userId", userId, "orderNo", orderNo));
+                    "couponId", couponId, "userId", userId, "orderNo", orderNo), headers);
             restTemplate.postForEntity(marketingServiceUrl + "/api/coupon/confirm", entity, Result.class);
         } catch (Exception e) {
             log.warn("确认用券失败 couponId={} orderNo={}", couponId, orderNo, e);
@@ -472,8 +481,10 @@ public class OrderServiceImpl implements OrderService {
     /** 调用券服务：退券（尽力而为） */
     private void callCouponReturn(Long couponId, Long userId, String orderNo) {
         try {
+            HttpHeaders headers = new HttpHeaders();
+            headers.setContentType(MediaType.APPLICATION_JSON);
             HttpEntity<Map<String, Object>> entity = new HttpEntity<>(Map.of(
-                    "couponId", couponId, "userId", userId, "orderNo", orderNo));
+                    "couponId", couponId, "userId", userId, "orderNo", orderNo), headers);
             restTemplate.postForEntity(marketingServiceUrl + "/api/coupon/return", entity, Result.class);
         } catch (Exception e) {
             log.warn("退券失败 couponId={} orderNo={}", couponId, orderNo, e);
@@ -531,6 +542,22 @@ public class OrderServiceImpl implements OrderService {
         vo.setPaymentNo(order.getPaymentNo());
         vo.setCancelReason(order.getCancelReason());
         vo.setCreatedAt(order.getCreatedAt());
+        return vo;
+    }
+
+    /** 订单 VO + 行程摘要（列表/详情展示：出发城市→到达城市 + 出发时间；行程服务异常时降级为空摘要） */
+    private OrderVO toVOWithTrip(TripOrder order) {
+        OrderVO vo = toVO(order);
+        try {
+            TripDTO trip = fetchTrip(order.getTripId());
+            if (trip != null) {
+                vo.setTripFromCity(trip.getFromCity());
+                vo.setTripToCity(trip.getToCity());
+                vo.setTripDepartureTime(trip.getDepartureTime());
+            }
+        } catch (Exception e) {
+            log.warn("订单行程摘要获取失败 orderNo={} tripId={}: {}", order.getOrderNo(), order.getTripId(), e.getMessage());
+        }
         return vo;
     }
 }

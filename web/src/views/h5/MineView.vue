@@ -46,6 +46,10 @@ async function doLogin() {
     toast.value = true
   }
 }
+
+function statusText(s: string) {
+  return s === 'PAID' ? '已支付' : s === 'CREATED' ? '待支付' : s === 'CANCELLED' ? '已取消' : s === 'EXPIRED' ? '已超时' : s
+}
 </script>
 
 <template>
@@ -76,8 +80,20 @@ async function doLogin() {
     <h3 v-if="orders.length" class="mine__section">最近订单</h3>
     <div v-if="orders.length" class="mine__orders">
       <GCard v-for="o in orders.slice(0, 3)" :key="o.orderNo" class="mine__order" @click="router.push(`/pay/${o.orderNo}`)">
-        <span class="num">{{ o.orderNo }}</span>
-        <span :class="`mine__order-status mine__order-status--${o.status}`">{{ o.status }}</span>
+        <div class="mine__order-main">
+          <p class="mine__order-route">
+            <template v-if="o.tripFromCity && o.tripToCity">{{ o.tripFromCity }} → {{ o.tripToCity }}</template>
+            <template v-else>行程拼车</template>
+            <span class="mine__order-price num">{{ o.payPrice }} 元</span>
+          </p>
+          <p class="mine__order-sub">
+            <template v-if="o.tripDepartureTime">发车 {{ o.tripDepartureTime }}</template>
+            <template v-else>下单 {{ o.createdAt }}</template>
+            <span class="mine__order-seats num">{{ o.seatCount }} 座</span>
+          </p>
+          <p class="mine__order-no num">{{ o.orderNo }}</p>
+        </div>
+        <span :class="`mine__order-status mine__order-status--${o.status}`">{{ statusText(o.status) }}</span>
       </GCard>
     </div>
 
@@ -165,7 +181,47 @@ async function doLogin() {
   cursor: pointer;
 }
 
+.mine__order-main {
+  flex: 1;
+  min-width: 0;
+  padding-right: var(--sp-2);
+}
+
+.mine__order-route {
+  font-size: var(--fs-15);
+  font-weight: var(--fw-semibold);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sp-1);
+}
+
+.mine__order-price {
+  color: var(--brand);
+  font-size: var(--fs-14);
+}
+
+.mine__order-sub {
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sp-1);
+  margin-top: 2px;
+  font-size: var(--fs-12);
+  color: var(--text-2);
+}
+
+.mine__order-no {
+  margin-top: 4px;
+  font-size: var(--fs-11);
+  color: var(--text-3);
+  overflow: hidden;
+  text-overflow: ellipsis;
+  white-space: nowrap;
+}
+
 .mine__order-status {
+  flex-shrink: 0;
   font-size: var(--fs-12);
 }
 

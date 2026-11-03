@@ -31,7 +31,7 @@ import java.util.List;
 public class LlmGateway {
 
     /** 固定系统前缀：所有 prompt 以此开头（厂商缓存复用 + 防注入） */
-    public static final String SYSTEM_PREFIX = "你是 GoShare 顺风拼车平台的出行助手。GoShare 是演示用顺风拼车平台，示例运营线路以中国河北省及周边城市之间的城际拼车为主（如石家庄、邯郸、保定、北京等城市）。回答用户出行问题时：1）先说明平台以这些示例城市运营；2）引导用户提供出发地、目的地与出行日期，以便查询系统内真实可订线路；3）绝不编造平台未覆盖的运营区域、公司背景、具体价格、班次时间或政策条款；4）凡系统数据无法确定的业务信息，一律提示用户查询具体线路，不自行脑补。";
+    public static final String SYSTEM_PREFIX = "你是 GoShare 顺风拼车平台的出行助手。GoShare 是演示用顺风拼车平台，示例运营线路以中国河北省及周边城市之间的城际拼车为主（如石家庄、邯郸、保定、北京等城市）。回答用户出行问题时：1）先说明平台以这些示例城市运营；2）引导用户提供出发地、目的地与出行日期，以便查询系统内真实可订线路；3）绝不编造平台未覆盖的运营区域、公司背景、具体价格、班次时间或政策条款；4）凡系统数据无法确定的业务信息，一律提示用户查询具体线路，不自行脑补。回复风格要求：像真人客服一样简洁口语化，一次回复不超过 4 句话；不使用 emoji、感叹号堆砌、营销腔和“重磅/超值/震撼”等话术；不知道就说不知道，不硬凑。";
 
     /** 答案缓存 TTL：12 小时（与夜间预生成周期匹配，每晚重生成） */
     private static final Duration CACHE_TTL = Duration.ofHours(12);
@@ -40,6 +40,7 @@ public class LlmGateway {
     private final StringRedisTemplate redisTemplate;
     private final LlmCallLogMapper llmCallLogMapper;
     private final LlmProperties properties;
+    private final WeatherRuleProvider weatherRuleProvider;
 
     /**
      * 统一入口
@@ -65,6 +66,19 @@ public class LlmGateway {
             }
         } catch (Exception e) {
             log.warn("[llm-gateway] Redis 不可用，跳过缓存关卡: {}", e.getMessage());
+        }
+
+        // 关卡2：天气意图（真实数据·零模型调用，来自 notify 天气服务）
+        String weatherAnswer = weatherRuleProvider.maybeAnswer(question);
+        if (weatherAnswer != null) {
+            try {
+                redisTemplate.opsForValue().set(cacheKey, weatherAnswer, CACHE_TTL);
+            } catch (Exception e) {
+                log.warn("[llm-gateway] 天气答案写缓存失败（不影响返回）: {}", e.getMessage());
+            }
+            record(bizType, tier, hash, 0, 0, (int) (System.currentTimeMillis() - start), false, true);
+            log.info("[llm-gateway] 关卡2天气数据命中 biz={} q={}", bizType, question);
+            return LlmResult.of(weatherAnswer, false, "小模型(天气)", true, 0, 0, (int) (System.currentTimeMillis() - start));
         }
 
         // 关卡2：小模型先答（规则意图零调用，未触碰大模型）

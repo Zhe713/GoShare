@@ -1,10 +1,11 @@
 <script setup lang="ts">
-/** 行程详情：起终点/时间/余座/价格 + 座位选择 + 下单 */
+/** 行程详情：起终点/时间/余座/价格 + 座位选择 + 优惠券选择 + 下单（领券→下单抵扣→支付优惠全链路） */
 import { onMounted, ref, computed } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { GNavBar, GCard, GButton, GSkeleton, GError } from '@/g-ui'
 import { getTrip, type Trip } from '@/api/trip'
 import { createOrder } from '@/api/order'
+import { myCoupons, type Coupon } from '@/api/user'
 
 const route = useRoute()
 const router = useRouter()
@@ -13,6 +14,8 @@ const loading = ref(true)
 const error = ref('')
 const seats = ref(1)
 const creating = ref(false)
+const coupons = ref<Coupon[]>([])
+const couponId = ref<number | null>(null)
 onMounted(async () => {
   try {
     trip.value = await getTrip(route.params.id as string)
@@ -21,10 +24,49 @@ onMounted(async () => {
   } finally {
     loading.value = false
   }
+  try {
+    coupons.value = await myCoupons()
+  } catch {
+    /* 未登录/失败静默，仅无券可选 */
+  }
 })
 
 const total = computed(() => Number(trip.value?.price ?? 0) * seats.value)
 const maxSeats = computed(() => Math.min(4, trip.value?.remainSeats ?? 1))
+
+/** 与后端 CouponCalculator 一致的抵扣金额（元） */
+function calcDiscount(c: Coupon): number {
+  const base = total.value
+  if (c.type === 'FULL_REDUCTION') {
+    return base >= Number(c.threshold) ? Math.min(Number(c.discountValue), base) : 0
+  }
+  if (c.type === 'CASH') return Math.min(Number(c.discountValue), base)
+  if (c.type === 'DISCOUNT') {
+    const pay = Math.round(base * Number(c.discountValue)) / 100
+    return Math.max(0, Math.round((base - pay) * 100) / 100)
+  }
+  return 0
+}
+
+/** 可用券：未使用 + 未过期 + 当前订单确实能抵扣（满减未满门槛的不可选） */
+const usableCoupons = computed(() =>
+  coupons.value
+    .filter((c) => c.status === 0 && (!c.expireAt || new Date(c.expireAt).getTime() > Date.now()) && calcDiscount(c) > 0)
+    .sort((a, b) => calcDiscount(b) - calcDiscount(a)),
+)
+
+const couponDiscount = computed(() => (couponId.value ? calcDiscount(usableCoupons.value.find((c) => c.id === couponId.value)!) : 0))
+const payTotal = computed(() => Math.max(0, Math.round((total.value - couponDiscount.value) * 100) / 100))
+
+function couponLabel(c: Coupon) {
+  const name =
+    c.type === 'FULL_REDUCTION'
+      ? `满${c.threshold}减${c.discountValue}`
+      : c.type === 'DISCOUNT'
+        ? `${c.discountValue / 10}折券`
+        : `立减${c.discountValue}元`
+  return `${name}（可抵 ${calcDiscount(c)} 元）`
+}
 
 async function confirmOrder() {
   if (!trip.value) return
@@ -33,6 +75,7 @@ async function confirmOrder() {
     const order = await createOrder({
       tripId: trip.value.id,
       seatCount: seats.value,
+      couponId: couponId.value ?? undefined,
       idempotentKey: `web-${Date.now()}`,
     })
     router.push(`/pay/${order.orderNo}`)
@@ -86,6 +129,23 @@ async function confirmOrder() {
           </button>
         </div>
         <p class="detail__total num">合计：<b>{{ total }}</b> 元</p>
+      </GCard>
+
+      <GCard class="detail__card">
+        <div class="detail__coupon-head">
+          <span>优惠券</span>
+          <button v-if="!usableCoupons.length" class="detail__coupon-go" @click="router.push('/coupons')">去领券 ›</button>
+        </div>
+        <label v-for="c in usableCoupons" :key="c.id" class="detail__coupon" :class="{ 'detail__coupon--on': couponId === c.id }">
+          <input type="radio" :value="c.id" v-model="couponId" class="detail__coupon-radio" />
+          <span class="detail__coupon-name">{{ couponLabel(c) }}</span>
+        </label>
+        <label v-if="usableCoupons.length" class="detail__coupon detail__coupon--none">
+          <input type="radio" :value="null" v-model="couponId" class="detail__coupon-radio" />
+          <span class="detail__coupon-name">不使用优惠券</span>
+        </label>
+        <p v-if="!usableCoupons.length" class="detail__coupon-empty">暂无可用优惠券（订单满减/折扣不适用）</p>
+        <p v-if="couponDiscount > 0" class="detail__total num">优惠：-{{ couponDiscount }} 元　实付：<b>{{ payTotal }}</b> 元</p>
       </GCard>
 
       <div class="detail__footer safe-bottom">
@@ -190,6 +250,50 @@ async function confirmOrder() {
 .detail__total b {
   font-size: var(--fs-24);
   color: var(--c-orange-500);
+}
+
+.detail__coupon-head {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  font-size: var(--fs-14);
+  color: var(--text-1);
+}
+
+.detail__coupon-go {
+  color: var(--brand);
+  font-size: var(--fs-13);
+}
+
+.detail__coupon {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  margin-top: var(--sp-1);
+  padding: var(--sp-1) var(--sp-2);
+  border: 1px solid var(--border);
+  border-radius: var(--r-sm);
+  cursor: pointer;
+}
+
+.detail__coupon--on {
+  border-color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+}
+
+.detail__coupon-radio {
+  accent-color: var(--brand);
+}
+
+.detail__coupon-name {
+  font-size: var(--fs-13);
+  color: var(--text-1);
+}
+
+.detail__coupon-empty {
+  margin-top: var(--sp-1);
+  font-size: var(--fs-12);
+  color: var(--text-3);
 }
 
 .detail__footer {

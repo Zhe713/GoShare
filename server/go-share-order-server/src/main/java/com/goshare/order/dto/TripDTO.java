@@ -13,6 +13,10 @@ public class TripDTO {
 
     private Long id;
 
+    private String fromCity;
+
+    private String toCity;
+
     private LocalDateTime departureTime;
 
     private BigDecimal price;

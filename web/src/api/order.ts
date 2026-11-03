@@ -14,6 +14,10 @@ export interface Order {
   cancelReason: string | null
   /** 订单创建时间（支付倒计时起点：创建后 15 分钟内支付） */
   createdAt: string
+  /** 行程摘要（我的订单/收银台展示，来自行程服务） */
+  tripFromCity?: string
+  tripToCity?: string
+  tripDepartureTime?: string
 }
 
 export function createOrder(body: {

@@ -67,6 +67,11 @@ async function pay() {
     paying.value = false
   }
 }
+
+/** 支付成功 → 回到首页（我的订单可查看该行程） */
+function goHome() {
+  router.push('/')
+}
 </script>
 
 <template>
@@ -80,6 +85,9 @@ async function pay() {
       <GCard class="pay__card">
         <p class="pay__label">待支付金额</p>
         <p class="pay__amount num"><b>{{ order.payPrice }}</b> 元</p>
+        <template v-if="order.tripFromCity && order.tripToCity">
+          <p class="pay__route">{{ order.tripFromCity }} → {{ order.tripToCity }}<span v-if="order.tripDepartureTime" class="pay__route-time num">发车 {{ order.tripDepartureTime }}</span></p>
+        </template>
         <p v-if="!expired" class="pay__countdown num">还剩 {{ countdownText(leftMs) }} 完成支付</p>
         <p v-else class="pay__countdown pay__countdown--expired num">已超时，订单已关闭</p>
         <p class="pay__no num">订单号 {{ order.orderNo }}</p>
@@ -98,8 +106,8 @@ async function pay() {
       </GCard>
 
       <div class="pay__footer safe-bottom">
-        <GButton type="primary" block :loading="paying" :disabled="expired" @click="pay">
-          {{ paid ? '支付成功' : expired ? '订单已超时' : '立即支付' }}
+        <GButton type="primary" block :loading="paying" :disabled="expired" @click="paid ? goHome() : pay()">
+          {{ paid ? '回到首页' : expired ? '订单已超时' : '立即支付' }}
         </GButton>
         <p v-if="paid" class="pay__done">✓ 支付成功，可回到首页查看</p>
         <p v-else-if="expired" class="pay__expired">支付超时订单已关闭，可重新下单</p>
@@ -156,6 +164,23 @@ async function pay() {
   margin-top: var(--sp-1);
   font-size: var(--fs-12);
   color: var(--text-3);
+}
+
+.pay__route {
+  margin-top: var(--sp-1);
+  display: flex;
+  justify-content: space-between;
+  align-items: baseline;
+  gap: var(--sp-1);
+  font-size: var(--fs-15);
+  font-weight: var(--fw-semibold);
+  color: var(--text-1);
+}
+
+.pay__route-time {
+  font-size: var(--fs-12);
+  font-weight: normal;
+  color: var(--text-2);
 }
 
 .pay__row {

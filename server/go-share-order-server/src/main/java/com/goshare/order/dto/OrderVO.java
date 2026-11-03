@@ -38,4 +38,11 @@ public class OrderVO {
     private String cancelReason;
 
     private LocalDateTime createdAt;
+
+    /** 行程摘要（列表/详情展示用，来自行程服务） */
+    private String tripFromCity;
+
+    private String tripToCity;
+
+    private LocalDateTime tripDepartureTime;
 }

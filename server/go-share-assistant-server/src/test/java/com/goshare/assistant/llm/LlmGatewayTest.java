@@ -34,7 +34,7 @@ class LlmGatewayTest {
         llmCallLogMapper = mock(LlmCallLogMapper.class);
         properties = new LlmProperties();
         properties.setDataVersion(2);
-        gateway = new LlmGateway(llmClient, redisTemplate, llmCallLogMapper, properties);
+        gateway = new LlmGateway(llmClient, redisTemplate, llmCallLogMapper, properties, mock(WeatherRuleProvider.class));
         ValueOperations<String, String> valueOps = mock(ValueOperations.class);
         when(redisTemplate.opsForValue()).thenReturn(valueOps);
     }

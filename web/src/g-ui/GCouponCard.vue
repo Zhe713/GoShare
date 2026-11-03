@@ -11,31 +11,36 @@ const props = withDefaults(
       desc?: string
       expire?: string
       status?: 'available' | 'claimed' | 'soldout' | 'used'
+      /** 金额单位：¥ 现金券 / 折 折扣券（如 8.5折） */
+      unit?: '¥' | '折'
+      /** 限量信息（秒杀券展示「限量 x 张 · 已抢 y 张」） */
+      soldInfo?: string
     }
   }>(),
-  { coupon: () => ({ amount: 0, minSpend: 0, name: '', desc: '', expire: '', status: 'available' as const }) },
+  { coupon: () => ({ amount: 0, minSpend: 0, name: '', desc: '', expire: '', status: 'available' as const, unit: '¥' as const, soldInfo: '' }) },
 )
 
 const emit = defineEmits<{ action: [] }>()
 
 const status = computed(() => props.coupon.status ?? 'available')
 const statusText = computed(() =>
-  status.value === 'used' ? '已使用' : status.value === 'claimed' ? '已领取' : status.value === 'soldout' ? '已领完' : '去领取',
+  status.value === 'used' ? '已使用' : status.value === 'claimed' ? '已领取' : status.value === 'soldout' ? '已抢完' : '去领取',
 )
 </script>
 
 <template>
   <div class="g-coupon" :class="`g-coupon--${status}`">
     <div class="g-coupon__amount">
-      <span class="g-coupon__sym">¥</span>
+      <span class="g-coupon__sym">{{ coupon.unit === '折' ? '' : '¥' }}</span>
       <span class="g-coupon__num num">{{ coupon.amount }}</span>
-      <span class="g-coupon__cond">满 {{ coupon.minSpend }} 可用</span>
+      <span class="g-coupon__cond">{{ coupon.unit === '折' ? '折' : `满 ${coupon.minSpend} 可用` }}</span>
     </div>
     <!-- 虚线撕口 -->
     <div class="g-coupon__perf"></div>
     <div class="g-coupon__info">
       <p class="g-coupon__name">{{ coupon.name }}</p>
       <p class="g-coupon__desc">{{ coupon.desc }}</p>
+      <p v-if="coupon.soldInfo" class="g-coupon__sold">{{ coupon.soldInfo }}</p>
       <p class="g-coupon__expire">有效期至 {{ coupon.expire }}</p>
     </div>
     <button class="g-coupon__action" :disabled="status !== 'available'" @click="emit('action')">
@@ -131,9 +136,14 @@ const statusText = computed(() =>
 }
 
 .g-coupon__desc,
-.g-coupon__expire {
+.g-coupon__expire,
+.g-coupon__sold {
   font-size: var(--fs-12);
   color: var(--text-3);
+}
+
+.g-coupon__sold {
+  color: var(--c-orange-500);
 }
 
 .g-coupon__action {

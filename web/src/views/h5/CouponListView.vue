@@ -40,24 +40,35 @@ async function claim(templateId: number) {
   }
 }
 
-/** 模板 → GCouponCard 展示（含已领完/已领取/可领取三态） */
+/** 模板 → GCouponCard 展示（可领/已领取/已抢完三态 + 秒杀限量信息 + 折券单位） */
 function toCard(t: CouponTemplate) {
   const claimed = claimedIds.value.has(t.id)
   const soldOut = t.receivedCount >= t.totalCount
   const status = claimed ? 'claimed' : soldOut ? 'soldout' : 'available'
   const name = t.templateName
-  const amount = t.type === 'DISCOUNT' ? 0 : Number(t.discountValue)
+  const isDiscount = t.type === 'DISCOUNT'
+  const amount = isDiscount ? Number(t.discountValue) / 10 : Number(t.discountValue)
   const minSpend = Number(t.threshold)
+  const isFlash = name.includes('秒杀') || name.includes('限量')
   const desc = claimed
     ? '已领取，每人限领一张'
     : soldOut
-      ? '已领完，下次早点来'
-      : t.type === 'DISCOUNT'
+      ? '已抢完，下次早点来'
+      : isDiscount
         ? '下单自动打折'
         : minSpend > 0
           ? `满${minSpend}元可用`
           : '无门槛'
-  return { id: t.id, name, amount, minSpend, desc, status: status as 'available' | 'claimed' | 'soldout' | 'used' }
+  return {
+    id: t.id,
+    name,
+    amount,
+    minSpend,
+    desc,
+    status: status as 'available' | 'claimed' | 'soldout' | 'used',
+    unit: (isDiscount ? '折' : '¥') as '折' | '¥',
+    soldInfo: isFlash ? `限量 ${t.totalCount} 张 · 已抢 ${t.receivedCount} 张` : '',
+  }
 }
 
 /** 领券中心展示列表 */
