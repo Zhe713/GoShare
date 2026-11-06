@@ -1,4 +1,5 @@
 import { test, expect, type Page } from '@playwright/test'
+import { ensureFutureTrips } from './helpers'
 
 /**
  * 第二轮验收修复 E2E（2026-11-03 六连击）：
@@ -13,6 +14,10 @@ import { test, expect, type Page } from '@playwright/test'
 const PHONE = '13900139000'
 const PASSWORD = '123456'
 
+/** 日期断言按运行时当天计算，避免跨天后用例必然失败 */
+const NOW = new Date()
+const TODAY_MD = `${NOW.getMonth() + 1}月${NOW.getDate()}日`
+
 async function apiLogin(page: Page): Promise<string> {
   const resp = await page.request.post('http://localhost:8000/api/user/login', {
     data: { phone: PHONE, password: PASSWORD },
@@ -22,7 +27,10 @@ async function apiLogin(page: Page): Promise<string> {
   return body.data.token as string
 }
 
-test('换线路弹层热门线路chips点击直达有行程（邯郸→北京 2 条）', async ({ page }) => {
+test('换线路弹层热门线路chips点击直达有行程（邯郸→北京）', async ({ page }) => {
+  // 热门线路 chip 能否直达「确有未来班次」的线路：班次数量运行时自愈，不写死种子数量
+  const countHandan = await ensureFutureTrips(page, '邯郸', '北京', 2)
+
   const token = await apiLogin(page)
   await page.addInitScript((t) => localStorage.setItem('goshare-token', t), token)
 
@@ -33,8 +41,7 @@ test('换线路弹层热门线路chips点击直达有行程（邯郸→北京 2 
   await page.getByRole('button', { name: '邯郸 → 北京' }).click()
   await page.getByRole('button', { name: '查看该线路行程' }).click()
   await expect(page.getByText('推荐行程 · 邯郸 → 北京')).toBeVisible()
-  await expect(page.locator('.home__list .g-trip-card').first()).toBeVisible({ timeout: 15_000 })
-  await expect(page.locator('.home__list .g-trip-card')).toHaveCount(2)
+  await expect(page.locator('.home__list .g-trip-card')).toHaveCount(countHandan, { timeout: 15_000 })
 })
 
 test('AI 天气真实实时数据（非 mock 死表）', async ({ page }) => {
@@ -59,7 +66,7 @@ test('AI 感知今日日期（今天几号）', async ({ page }) => {
   await expect(page.getByText('AI 出行助手')).toBeVisible()
   await page.getByPlaceholder('问问助手…').fill('今天几号？星期几？')
   await page.getByRole('button', { name: '发送' }).click()
-  await expect(page.locator('.g-chat__bubble').last()).toContainText('11月3日', { timeout: 30_000 })
+  await expect(page.locator('.g-chat__bubble').last()).toContainText(TODAY_MD, { timeout: 30_000 })
 })
 
 test('AI 多轮上下文：邯郸到北京 11.3 下午出发不再重复要日期', async ({ page }) => {
@@ -108,7 +115,9 @@ test('券包新增可领秒杀券：限量/有效期信息展示且可领取', a
   // 新模板「限时秒杀立减6元」未领取 → 卡片展示限量信息 + 可领按钮
   const card = page.getByText('限时秒杀立减6元').first()
   await expect(card).toBeVisible({ timeout: 15_000 })
-  await expect(page.getByText('限量 30 张 · 已抢 0 张')).toBeVisible()
+  // 已抢数随历史领用而增长（用例自身领券也会 +1），断言格式而非写死数值，避免用例数据自冲突；
+  // 页面可能同时存在同名普通券与秒杀券卡片，取 first 规避 strict 冲突
+  await expect(page.getByText(/限量 30 张 · 已抢 \d+ 张/).first()).toBeVisible()
   // 有效期不为空：秒杀券「有效期至 截止 距结束…」、普通券「有效期至 领取后 X 天内有效」
   await expect(page.getByText('有效期至 截止').first()).toBeVisible()
   await expect(page.getByText(/有效期至 领取后/).first()).toBeVisible()

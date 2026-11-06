@@ -1,24 +1,98 @@
 import { apiGet, apiPost } from './request'
 
-/** 用户 */
+/** 用户（与后端 UserVO 字段对齐） */
 export interface UserInfo {
   id: number
   phone: string
-  name?: string
+  nickname?: string
+  avatarUrl?: string
+  realName?: string
+  /** 1=已实名 */
+  realNameVerified?: number
+  /** 1=已认证车主 */
+  driverVerified?: number
   role: string
   trustScore?: string
 }
 
-export function login(phone: string, password: string): Promise<{ token: string; user: UserInfo }> {
-  return apiPost<{ token: string; user: UserInfo }>('/user/login', { phone, password })
+/**
+ * 他人可见的公开资料（后端 UserProfileVO）。
+ * 注意这里没有手机号和真名——后端已把带 PII 的接口收为内部命令。
+ */
+export interface UserProfile {
+  id: number
+  nickname?: string
+  avatarUrl?: string
+  trustScore?: string
+  realNameVerified?: boolean
+  driverVerified?: boolean
+  joinedAt?: string
+}
+
+/** 登录响应（后端 LoginResponse 是扁平结构，不是嵌套 user） */
+export interface LoginResult {
+  token: string
+  userId: number
+  nickname?: string
+  role: string
+}
+
+export function login(phone: string, password: string): Promise<LoginResult> {
+  return apiPost<LoginResult>('/user/login', { phone, password })
+}
+
+/** 当前登录用户（token 由拦截器注入；401 会自动清 token） */
+export function currentUser(): Promise<UserInfo> {
+  return apiGet<UserInfo>('/user/me')
 }
 
 export function register(body: { phone: string; password: string; name?: string }): Promise<{ id: number }> {
   return apiPost<{ id: number }>('/user/register', body)
 }
 
-export function getUser(id: number | string): Promise<UserInfo> {
-  return apiGet<UserInfo>(`/user/${id}`)
+/** 车主认证：提交申请 */
+export function certificationApply(body: {
+  licensePlate: string
+  vehicleModel: string
+  seatCount: number
+  drivingLicenseNo?: string
+}): Promise<{ id: number }> {
+  return apiPost<{ id: number }>('/driver/certification/apply', body)
+}
+
+/** 车主认证：我的认证记录 */
+export interface Certification {
+  id: number
+  licensePlate: string
+  vehicleModel: string
+  seatCount: number
+  /** 0待审核 1通过 2拒绝 */
+  status: number
+  auditRemark?: string
+}
+
+export function myCertification(): Promise<Certification | null> {
+  return apiGet<Certification | null>('/driver/certification/mine')
+}
+
+/** 行程账单（F5：月度聚合） */
+export interface TripBill {
+  month: string
+  orderCount: number
+  totalDistanceKm: number
+  totalPay: number
+  taxiBenchmark: number
+  savedEstimate: number
+  topRoutes: { fromCity: string; toCity: string; count: number }[]
+}
+
+export function tripBill(month?: string): Promise<TripBill> {
+  return apiGet<TripBill>(`/order/bill${month ? '?month=' + month : ''}`)
+}
+
+/** 公开资料：行程详情页展示车主卡片用（脱敏，任何登录用户可查） */
+export function getUserProfile(id: number | string): Promise<UserProfile> {
+  return apiGet<UserProfile>(`/user/${id}/profile`)
 }
 
 /** 优惠券（后端 CouponVO 字段） */
@@ -72,6 +146,26 @@ export function assistantChat(
   modelName: string
 }> {
   return apiPost<{ answer: string; fromCache: boolean; modelName: string }>('/assistant/chat', { text, history })
+}
+
+/** F1 订单草稿确认卡（对话式下单：口语 → 确认卡，点确认才真正下单） */
+export interface OrderDraft {
+  tripId: number | null
+  fromCity: string | null
+  toCity: string | null
+  departureTime: string | null
+  remainSeats: number | null
+  seatCount: number
+  unitPrice: number | null
+  estimatedTotal: number | null
+  cancelPolicy: string | null
+  stopCities: string[] | null
+  orderable: boolean
+  message: string | null
+}
+
+export function orderDraft(text: string): Promise<OrderDraft> {
+  return apiPost<OrderDraft>('/assistant/order-draft', { text })
 }
 
 /** 天气 */

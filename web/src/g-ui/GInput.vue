@@ -5,7 +5,7 @@ import { computed, ref, useId } from 'vue'
 const props = withDefaults(
   defineProps<{
     modelValue?: string
-    type?: 'text' | 'password' | 'number'
+    type?: 'text' | 'password' | 'number' | 'datetime-local'
     placeholder?: string
     label?: string
     error?: string

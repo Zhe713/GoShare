@@ -6,6 +6,7 @@ import { GNavBar, GCard, GButton, GSkeleton, GError } from '@/g-ui'
 import { getTrip, type Trip } from '@/api/trip'
 import { createOrder } from '@/api/order'
 import { myCoupons, type Coupon } from '@/api/user'
+import { yuan } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -115,6 +116,28 @@ async function confirmOrder() {
         <p v-if="trip.remark" class="detail__remark">{{ trip.remark }}</p>
       </GCard>
 
+      <!-- 车主与车辆信任信息（阶段1新增：下单前能看到"上谁的车"） -->
+      <GCard v-if="trip.vehiclePlate || trip.driverNickname || trip.stops?.length" class="detail__card">
+        <h3 class="detail__section-title">车主与车辆</h3>
+        <div v-if="trip.driverNickname || trip.vehiclePlate" class="detail__driver">
+          <span v-if="trip.driverNickname" class="detail__driver-name">{{ trip.driverNickname }}</span>
+          <span v-if="trip.vehicleColor" class="detail__driver-tag">{{ trip.vehicleColor }}</span>
+          <span v-if="trip.vehiclePlate" class="detail__driver-tag">{{ trip.vehiclePlate }}</span>
+          <span v-if="trip.vehicleModel" class="detail__driver-tag">{{ trip.vehicleModel }}</span>
+        </div>
+        <!-- 站点序列：起终点 + 途经点 -->
+        <div v-if="trip.stops?.length" class="detail__stops">
+          <div v-for="(s, i) in trip.stops" :key="i" class="detail__stop">
+            <span class="detail__stop-dot" :class="{ 'detail__stop-dot--end': i === trip.stops.length - 1 }"></span>
+            <div class="detail__stop-info">
+              <p class="detail__stop-city">{{ s.city }}</p>
+              <p v-if="s.address" class="detail__stop-addr">{{ s.address }}</p>
+            </div>
+          </div>
+        </div>
+        <p v-if="trip.totalDistanceKm" class="detail__remark">全程约 {{ trip.totalDistanceKm }} 公里</p>
+      </GCard>
+
       <GCard class="detail__card">
         <div class="detail__seats">
           <span>选择座位</span>
@@ -145,7 +168,7 @@ async function confirmOrder() {
           <span class="detail__coupon-name">不使用优惠券</span>
         </label>
         <p v-if="!usableCoupons.length" class="detail__coupon-empty">暂无可用优惠券（订单满减/折扣不适用）</p>
-        <p v-if="couponDiscount > 0" class="detail__total num">优惠：-{{ couponDiscount }} 元　实付：<b>{{ payTotal }}</b> 元</p>
+        <p v-if="couponDiscount > 0" class="detail__total num">优惠：-{{ yuan(couponDiscount) }} 元　实付：<b>{{ yuan(payTotal) }}</b> 元</p>
       </GCard>
 
       <div class="detail__footer safe-bottom">
@@ -218,6 +241,69 @@ async function confirmOrder() {
   margin-top: var(--sp-1);
   font-size: var(--fs-13);
   color: var(--text-2);
+}
+
+.detail__section-title {
+  font-size: var(--fs-14);
+  font-weight: var(--fw-semibold);
+  margin-bottom: var(--sp-2);
+}
+
+.detail__driver {
+  display: flex;
+  align-items: center;
+  gap: var(--sp-1);
+  flex-wrap: wrap;
+}
+
+.detail__driver-name {
+  font-size: var(--fs-15);
+  font-weight: var(--fw-semibold);
+  color: var(--text-1);
+}
+
+.detail__driver-tag {
+  font-size: var(--fs-12);
+  color: var(--brand);
+  background: color-mix(in srgb, var(--brand) 10%, transparent);
+  padding: 2px 8px;
+  border-radius: var(--r-sm);
+}
+
+.detail__stops {
+  margin-top: var(--sp-2);
+  display: flex;
+  flex-direction: column;
+  gap: var(--sp-1);
+}
+
+.detail__stop {
+  display: flex;
+  align-items: flex-start;
+  gap: var(--sp-2);
+}
+
+.detail__stop-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 50%;
+  background: var(--brand);
+  margin-top: 6px;
+  flex-shrink: 0;
+}
+
+.detail__stop-dot--end {
+  background: var(--c-orange-500);
+}
+
+.detail__stop-city {
+  font-size: var(--fs-14);
+  color: var(--text-1);
+}
+
+.detail__stop-addr {
+  font-size: var(--fs-12);
+  color: var(--text-3);
 }
 
 .detail__seats {

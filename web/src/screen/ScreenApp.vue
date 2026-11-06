@@ -3,6 +3,16 @@
 import { onMounted, ref, markRaw } from 'vue'
 import * as echarts from 'echarts'
 import { searchTrips, type Trip } from '@/api/trip'
+import { apiGet } from '@/api/request'
+
+/** 后端 /api/assistant/llm-stats 的实际返回结构 */
+interface LlmStats {
+  totalRequests?: number
+  cacheHitCount?: number
+  gateSkippedCount?: number
+  cacheHitRate?: number
+  gateSkippedRate?: number
+}
 
 const trips = ref<Trip[]>([])
 const aiCalls = ref<number | null>(null)
@@ -86,20 +96,16 @@ onMounted(async () => {
   } catch {
     trips.value = []
   }
-  // 真实 AI 统计（后端 llm-stats，失败则 mock 演示值）
+  // 真实 AI 统计：走统一请求层（自动带 token / 统一解包 / 401 处理）。
+  // 拿不到就显示 0，不再回落 28/21 这类伪造演示值——面板上出现的数字必须是真的。
   try {
-    const resp = await fetch('/api/assistant/llm-stats')
-    if (resp.ok) {
-      const body = await resp.json()
-      const d = body?.data ?? body
-      aiCalls.value = d?.total ?? 28
-      aiCached.value = d?.cached ?? 21
-    }
+    const d = await apiGet<LlmStats>('/assistant/llm-stats')
+    aiCalls.value = d?.totalRequests ?? 0
+    aiCached.value = d?.cacheHitCount ?? 0
   } catch {
-    /* mock */
+    aiCalls.value = 0
+    aiCached.value = 0
   }
-  aiCalls.value = aiCalls.value ?? 28
-  aiCached.value = aiCached.value ?? 21
   draw()
   window.addEventListener('resize', draw)
 })
@@ -125,6 +131,7 @@ onMounted(async () => {
         <h3>AI 调用 · 缓存命中率</h3>
         <div data-chart="llm" class="screen__chart"></div>
         <p class="screen__tip">缓存命中 = 关卡1 零模型调用（llm-stats 真实统计）</p>
+        <p class="screen__tip screen__tip--warn" v-if="aiCalls === 0">未登录或暂无调用记录，登录后展示真实统计</p>
       </section>
       <section class="screen__card">
         <h3>在售行程</h3>
@@ -151,7 +158,6 @@ onMounted(async () => {
   font-size: var(--fs-24);
   letter-spacing: 2px;
   background: var(--brand-grad);
-  background-clip: text;
   background-clip: text;
   color: transparent;
 }
@@ -198,6 +204,10 @@ onMounted(async () => {
   font-size: var(--fs-12);
   color: var(--text-3);
   text-align: center;
+}
+
+.screen__tip--warn {
+  color: var(--warning, #d98b16);
 }
 
 @media (width <= 800px) {
