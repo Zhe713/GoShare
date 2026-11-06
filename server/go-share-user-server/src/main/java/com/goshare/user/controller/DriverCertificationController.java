@@ -1,6 +1,7 @@
 package com.goshare.user.controller;
 
 import com.goshare.common.result.Result;
+import com.goshare.common.security.InternalApi;
 import com.goshare.user.dto.CertificationAuditRequest;
 import com.goshare.user.dto.DriverCertificationRequest;
 import com.goshare.user.dto.DriverCertificationVO;
@@ -36,7 +37,14 @@ public class DriverCertificationController {
         return Result.success(certificationService.apply(userId, request));
     }
 
-    /** 审核（管理端调用） */
+    /**
+     * 审核（管理端调用）。
+     *
+     * <p>标 {@link InternalApi}：此前该接口没有任何鉴权，普通乘客提交申请后调一次
+     * `{certificationId, pass:true}` 就能把自己变成车主（实测可复现）。
+     * 现在只接受内部令牌，且网关已从公网路由摘除。
+     */
+    @InternalApi
     @PostMapping("/certification/audit")
     public Result<DriverCertificationVO> audit(@RequestBody @Valid CertificationAuditRequest request) {
         return Result.success(certificationService.audit(

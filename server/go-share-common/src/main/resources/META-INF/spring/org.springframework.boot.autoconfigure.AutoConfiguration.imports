@@ -1,0 +1,2 @@
+com.goshare.common.config.InternalApiAutoConfiguration
+com.goshare.common.config.TraceAutoConfiguration

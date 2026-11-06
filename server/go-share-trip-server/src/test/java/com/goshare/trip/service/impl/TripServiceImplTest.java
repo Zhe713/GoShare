@@ -8,6 +8,8 @@ import com.goshare.trip.entity.Trip;
 import com.goshare.trip.es.TripDocument;
 import com.goshare.trip.es.TripEsService;
 import com.goshare.trip.mapper.TripMapper;
+import com.goshare.trip.mapper.TripSegmentMapper;
+import com.goshare.trip.mapper.TripStopMapper;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
 import org.springframework.data.redis.core.StringRedisTemplate;
@@ -30,6 +32,8 @@ import static org.mockito.Mockito.*;
 class TripServiceImplTest {
 
     private TripMapper tripMapper;
+    private TripStopMapper tripStopMapper;
+    private TripSegmentMapper tripSegmentMapper;
     private StringRedisTemplate redisTemplate;
     private TripEsService tripEsService;
     private TripServiceImpl service;
@@ -37,9 +41,11 @@ class TripServiceImplTest {
     @BeforeEach
     void setUp() {
         tripMapper = mock(TripMapper.class);
+        tripStopMapper = mock(TripStopMapper.class);
+        tripSegmentMapper = mock(TripSegmentMapper.class);
         redisTemplate = mock(StringRedisTemplate.class);
         tripEsService = mock(TripEsService.class);
-        service = new TripServiceImpl(tripMapper, redisTemplate, tripEsService);
+        service = new TripServiceImpl(tripMapper, tripStopMapper, tripSegmentMapper, redisTemplate, tripEsService);
     }
 
     private TripPublishRequest futureRequest() {

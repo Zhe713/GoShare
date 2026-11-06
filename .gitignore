@@ -8,6 +8,7 @@
 node_modules/
 dist/
 .vite/
+*.tsbuildinfo
 
 # 临时目录（_work 放一次性产物，不入库）
 _work/
@@ -30,6 +31,12 @@ Thumbs.db
 .env
 *.local.yml
 
-# E2E 测试产物
-web/test-results/
+# E2E 测试产物（含带时间戳的输出目录，例如 test-results-101011）
+web/test-results*/
 web/playwright-report/
+
+# 压测原始响应（只保留汇总报告）
+reports/load-segment-*/
+
+# 本地助手工作目录（记忆、QA 临时产物，不入库）
+**/.workbuddy/

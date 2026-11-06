@@ -31,9 +31,11 @@ spring:
           predicates:
             - Path=/api/order/**
           # 网关令牌桶限流（Redis 实现）：每秒补 20 个令牌、突发上限 40
+          # key-resolver 必须显式指定，否则默认 PrincipalNameKeyResolver 对匿名请求返回空 → 直接放行（限流形同虚设）
           filters:
             - name: RequestRateLimiter
               args:
+                key-resolver: "#{@clientIpKeyResolver}"
                 redis-rate-limiter.replenishRate: 20
                 redis-rate-limiter.burstCapacity: 40
                 redis-rate-limiter.requestedTokens: 1

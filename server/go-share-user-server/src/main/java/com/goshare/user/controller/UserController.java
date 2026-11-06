@@ -1,10 +1,12 @@
 package com.goshare.user.controller;
 
 import com.goshare.common.result.Result;
+import com.goshare.common.security.InternalApi;
 import com.goshare.user.dto.LoginRequest;
 import com.goshare.user.dto.LoginResponse;
 import com.goshare.user.dto.RealNameVerifyRequest;
 import com.goshare.user.dto.RegisterRequest;
+import com.goshare.user.dto.UserProfileVO;
 import com.goshare.user.dto.UserVO;
 import com.goshare.user.entity.User;
 import com.goshare.user.service.UserService;
@@ -50,7 +52,36 @@ public class UserController {
         return Result.success(vo);
     }
 
-    /** 按用户ID查询（供出行助手撮合排序取信任分等特征） */
+    /**
+     * 他人可见的公开资料（脱敏）。
+     *
+     * <p>行程详情页展示车主卡片用：昵称/头像/信任分/实名与车主认证状态，
+     * 不含手机号、真名、身份证。任何登录用户都可查，因为这是"上车前必须知道的信息"。
+     */
+    @GetMapping("/{userId}/profile")
+    public Result<UserProfileVO> profile(@PathVariable("userId") Long userId) {
+        User user = userService.getUserById(userId);
+        if (user == null) {
+            throw new com.goshare.common.exception.BusinessException(404, "用户不存在");
+        }
+        UserProfileVO vo = new UserProfileVO();
+        vo.setId(user.getId());
+        vo.setNickname(user.getNickname());
+        vo.setAvatarUrl(user.getAvatarUrl());
+        vo.setTrustScore(user.getTrustScore());
+        vo.setRealNameVerified(user.getRealNameVerified() != null && user.getRealNameVerified() == 1);
+        vo.setDriverVerified(user.getDriverVerified() != null && user.getDriverVerified() == 1);
+        vo.setJoinedAt(user.getCreatedAt());
+        return Result.success(vo);
+    }
+
+    /**
+     * 按用户ID查询（供出行助手撮合排序取信任分等特征）。
+     *
+     * <p>标 {@link InternalApi}：返回体里有手机号和真名，之前任何登录用户遍历 ID
+     * 就能批量拉走全站用户的手机号（实测可复现）。公开信息请走 {@code /{userId}/profile}。
+     */
+    @InternalApi
     @GetMapping("/{userId}")
     public Result<UserVO> getById(@PathVariable("userId") Long userId) {
         User user = userService.getUserById(userId);

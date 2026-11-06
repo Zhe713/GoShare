@@ -69,4 +69,28 @@ public class TripController {
     public Result<Integer> esSync() {
         return Result.success(tripService.syncAllToEs());
     }
+
+    /** 车主取消行程（阶段1新增：撤单会触发订单批量退单退座退券） */
+    @PostMapping("/{tripId}/cancel")
+    public Result<TripVO> cancelTrip(@RequestHeader(value = "Authorization", required = false) String auth,
+                                     @PathVariable("tripId") Long tripId) {
+        Long driverId = currentUserResolver.resolveUserId(auth);
+        return Result.success(tripService.cancelTrip(driverId, tripId));
+    }
+
+    /** 车主标记发车（阶段1新增） */
+    @PostMapping("/{tripId}/depart")
+    public Result<TripVO> depart(@RequestHeader(value = "Authorization", required = false) String auth,
+                                 @PathVariable("tripId") Long tripId) {
+        Long driverId = currentUserResolver.resolveUserId(auth);
+        return Result.success(tripService.depart(driverId, tripId));
+    }
+
+    /** 车主标记到达完成（阶段1新增） */
+    @PostMapping("/{tripId}/complete")
+    public Result<TripVO> complete(@RequestHeader(value = "Authorization", required = false) String auth,
+                                   @PathVariable("tripId") Long tripId) {
+        Long driverId = currentUserResolver.resolveUserId(auth);
+        return Result.success(tripService.complete(driverId, tripId));
+    }
 }
