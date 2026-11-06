@@ -70,12 +70,28 @@ jobs:
           cache-dependency-path: web/package-lock.json
       - name: 启动基础设施（MySQL/Redis/ES/Nacos/RocketMQ）
         run: docker compose -f docker/docker-compose.yml up -d
+
+      - name: 等待中间件就绪（MySQL 建表 + Nacos 可注册）
+        run: |
+          for i in $(seq 1 60); do
+            if docker exec goshare-mysql mysqladmin ping -uroot -proot123 --silent 2>/dev/null; then
+              echo "mysql ready"; break
+            fi
+            sleep 2
+          done
+          for i in $(seq 1 60); do
+            code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8848/nacos/ || true)
+            if [ "$code" = "200" ] || [ "$code" = "302" ]; then echo "nacos ready"; break; fi
+            sleep 2
+          done
       - name: 打包后端 fat jar
         run: mvn -B package -DskipTests --file server/pom.xml
       - name: 后台启动 8 个后端服务 + 等待就绪
         run: |
+          # 注册到 127.0.0.1：CI 上服务跑在宿主、Nacos 在容器，避免注册成不可路由的网卡地址
           for m in user trip order marketing payment notify assistant gateway; do
-            nohup java -jar server/go-share-$m-server/target/go-share-$m-server-0.0.1-SNAPSHOT.jar > logs-$m.txt 2>&1 &
+            nohup java -jar server/go-share-$m-server/target/go-share-$m-server-0.0.1-SNAPSHOT.jar \
+              --spring.cloud.nacos.discovery.ip=127.0.0.1 > logs-$m.txt 2>&1 &
           done
           for p in 8000 8001 8002 8003 8004 8005 8006 8007; do
             for i in $(seq 1 60); do
