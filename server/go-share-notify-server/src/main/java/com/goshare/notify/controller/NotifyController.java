@@ -51,7 +51,7 @@ public class NotifyController {
         try {
             // 订单 → 行程ID
             Result<Map<String, Object>> orderResp = restTemplate.exchange(
-                            orderUrl + "/api/order/" + orderNo, HttpMethod.GET, null,
+                            orderUrl + "/api/order/internal/" + orderNo, HttpMethod.GET, null,
                             new ParameterizedTypeReference<Result<Map<String, Object>>>() {
                             })
                     .getBody();

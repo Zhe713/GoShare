@@ -14,6 +14,9 @@ public class OrderDTO {
 
     private Long tripId;
 
+    /** 下单乘客（用于校验"只能给自己的订单付款"） */
+    private Long passengerId;
+
     private BigDecimal payPrice;
 
     /** CREATED待支付 PAID已支付 ... */

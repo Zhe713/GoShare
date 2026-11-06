@@ -30,6 +30,15 @@ public class TripOrder {
     /** 购买座位数 */
     private Integer seatCount;
 
+    /** 上车站点序号（阶段1区间库存新增，null=全程从起点） */
+    private Integer fromStopSeq;
+
+    /** 下车站点序号（阶段1区间库存新增，null=全程到终点） */
+    private Integer toStopSeq;
+
+    /** 订单区间里程（公里，阶段1区间计价新增） */
+    private BigDecimal distanceKm;
+
     /** 订单总额（元） */
     private BigDecimal totalPrice;
 

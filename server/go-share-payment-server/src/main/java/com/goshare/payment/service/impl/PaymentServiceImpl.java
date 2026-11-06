@@ -20,6 +20,7 @@ import org.springframework.stereotype.Service;
 import org.springframework.transaction.annotation.Transactional;
 import org.springframework.web.client.RestTemplate;
 
+import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.time.format.DateTimeFormatter;
 import java.util.Map;
@@ -40,7 +41,6 @@ public class PaymentServiceImpl implements PaymentService {
     private String orderServiceUrl;
 
     @Override
-    @Transactional(rollbackFor = Exception.class)
     public PaymentVO pay(Long passengerId, String orderNo) {
         // 1. 从订单服务获取订单（金额、状态）
         OrderDTO order = fetchOrder(orderNo);
@@ -49,6 +49,10 @@ public class PaymentServiceImpl implements PaymentService {
         }
         if (!"CREATED".equals(order.getStatus())) {
             throw new BusinessException(400, "订单当前状态不可支付");
+        }
+        // 只能给自己的订单付款（此前任何人可以替他人下单付款）
+        if (order.getPassengerId() != null && !order.getPassengerId().equals(passengerId)) {
+            throw new BusinessException(403, "无权支付他人订单");
         }
 
         // 2. 查已有支付记录：已成功则拒绝；有未完成记录则复用
@@ -63,24 +67,30 @@ public class PaymentServiceImpl implements PaymentService {
             payment.setAmount(order.getPayPrice());
             payment.setStatus("PENDING");
             payment.setChannel("MOCK");
+            // DB 的 DEFAULT CURRENT_TIMESTAMP 不会回填实体，显式赋值才能让返回的 VO 带上创建时间
+            payment.setCreatedAt(LocalDateTime.now());
             paymentMapper.insert(payment);
         }
 
-        // 3. 模拟支付渠道扣款成功
+        // 3. 模拟支付渠道扣款成功，并**先把成功流水落库**
+        //    顺序很关键：订单服务现在会回查流水来校验回调真实性，
+        //    如果先回调再落库，订单侧必然查不到这笔 SUCCESS 流水而拒绝支付。
         log.info("模拟扣款成功 paymentNo={} amount={}", payment.getPaymentNo(), payment.getAmount());
-
-        // 4. 回调订单服务：订单待支付 → 已支付（订单服务内部幂等）
-        Result<?> callback = callOrderPayCallback(orderNo, payment.getPaymentNo());
-        if (callback == null || callback.getCode() != 200) {
-            payment.setStatus("FAILED");
-            paymentMapper.updateById(payment);
-            throw new BusinessException(500, "订单回调失败，支付未完成");
-        }
-
-        // 5. 本地支付记录置为成功
         payment.setStatus("SUCCESS");
         payment.setPaidAt(LocalDateTime.now());
         paymentMapper.updateById(payment);
+
+        // 4. 回调订单服务：订单待支付 → 已支付（订单服务内部幂等 + 校验流水与金额）
+        Result<?> callback = callOrderPayCallback(orderNo, payment.getPaymentNo());
+        if (callback == null || callback.getCode() != 200) {
+            // 注意：这里**不能**把流水改回 FAILED。
+            // 钱已经扣了，把成功流水改成失败等于"资金事实被业务失败抹掉"，
+            // 真实渠道下会直接造成资损和对账不平。正确做法是保留 SUCCESS，
+            // 由补偿任务（阶段 2 的对账）负责把订单侧补齐。
+            log.error("扣款成功但订单回调失败，流水保持 SUCCESS 等待补偿 orderNo={} paymentNo={}",
+                    orderNo, payment.getPaymentNo());
+            throw new BusinessException(500, "支付已成功，但订单状态同步失败，请稍后刷新");
+        }
         return toVO(payment);
     }
 
@@ -94,12 +104,43 @@ public class PaymentServiceImpl implements PaymentService {
         return toVO(payment);
     }
 
+    /**
+     * 退款（阶段2退款域）。
+     *
+     * <p>演示渠道 MOCK：退款立即成功，把原支付流水置为 REFUNDED。
+     * 真实渠道下这里应调用第三方退款 API 并回写渠道流水号，此处简化。
+     */
+    @Override
+    public boolean refund(String paymentNo, BigDecimal amount) {
+        Payment payment = paymentMapper.selectOne(new LambdaQueryWrapper<Payment>()
+                .eq(Payment::getPaymentNo, paymentNo));
+        if (payment == null) {
+            log.warn("退款失败：支付流水不存在 paymentNo={}", paymentNo);
+            return false;
+        }
+        if (!"SUCCESS".equals(payment.getStatus())) {
+            log.warn("退款失败：支付流水状态不允许退款 paymentNo={} status={}", paymentNo, payment.getStatus());
+            return false;
+        }
+        if (amount != null && payment.getAmount() != null
+                && amount.compareTo(payment.getAmount()) > 0) {
+            log.warn("退款失败：退款金额超过支付金额 paymentNo={} refund={} paid={}",
+                    paymentNo, amount, payment.getAmount());
+            return false;
+        }
+        // 模拟退款成功
+        payment.setStatus("REFUNDED");
+        paymentMapper.updateById(payment);
+        log.info("退款成功 paymentNo={} amount={}", paymentNo, amount);
+        return true;
+    }
+
     // ---------- 私有方法 ----------
 
     private OrderDTO fetchOrder(String orderNo) {
         try {
             Result<OrderDTO> result = restTemplate.exchange(
-                            orderServiceUrl + "/api/order/" + orderNo,
+                            orderServiceUrl + "/api/order/internal/" + orderNo,
                             HttpMethod.GET, null,
                             new ParameterizedTypeReference<Result<OrderDTO>>() {})
                     .getBody();

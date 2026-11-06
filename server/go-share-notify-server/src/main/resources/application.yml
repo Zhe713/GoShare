@@ -8,9 +8,35 @@ spring:
     nacos:
       discovery:
         server-addr: localhost:8848
+  # 阶段2：通知服务重定位——接入数据库（站内信落库）
+  datasource:
+    url: jdbc:mysql://localhost:3306/goshare?useUnicode=true&characterEncoding=utf8&serverTimezone=Asia/Shanghai&useSSL=false&allowPublicKeyRetrieval=true
+    username: root
+    password: root123
+    driver-class-name: com.mysql.cj.jdbc.Driver
+
+# MyBatis-Plus：扫描 notify 包的实体与 Mapper
+mybatis-plus:
+  mapper-locations: classpath*:/mapper/**/*.xml
+  global-config:
+    db-config:
+      id-type: auto
+
+# RocketMQ（阶段2：消费订单事件生成站内信）
+rocketmq:
+  name-server: localhost:9876
+  producer:
+    group: go-share-notify-producer
+  consumer:
+    group: go-share-notify-consumer
 
 # 项目自定义配置
 goshare:
+  # 与其他服务保持一致的 JWT 密钥：启动类需扫描 com.goshare 才能共享 common 的
+  # 统一返回/异常处理，而 common 的 JwtUtil 依赖此配置，缺失会导致启动失败
+  jwt:
+    secret: go-share-demo-jwt-secret-please-change-in-prod-0123456789
+    expire-hours: 24
   weather:
     # 天气数据源：http（真实数据·Open-Meteo 免费无 Key）| mock（内置演示数据，默认零外部依赖）
     # 已切真实数据：城市地理编码 + 实时 forecast，WMO 天气码转中文，实时更新

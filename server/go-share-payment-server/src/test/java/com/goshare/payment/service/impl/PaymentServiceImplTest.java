@@ -50,7 +50,7 @@ class PaymentServiceImplTest {
 
     @Test
     void payOrderNotFound() {
-        when(restTemplate.exchange(eq("http://order:8003/api/order/20261030151932907564"),
+        when(restTemplate.exchange(eq("http://order:8003/api/order/internal/20261030151932907564"),
                 any(), any(), any(ParameterizedTypeReference.class))).thenReturn(ResponseEntity.ok(Result.success(null)));
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> service.pay(2L, "20261030151932907564"));
@@ -99,9 +99,17 @@ class PaymentServiceImplTest {
         verify(paymentMapper, times(1)).updateById(any(Payment.class));
     }
 
+    /**
+     * 回调失败时**不能**把已成功扣款的流水改成 FAILED。
+     *
+     * <p>旧实现是"回调失败 → 置 FAILED"，但它同时又带 @Transactional，
+     * 抛出异常后整个事务回滚，这条 FAILED 记录实际根本不存在（旧测试断言的是一个幻觉状态）。
+     * 现在的语义是：钱已经扣了，流水必须保持 SUCCESS，订单侧由补偿/对账补齐，
+     * 否则真实渠道下就是"已扣款、记失败、资损"。
+     */
     @Test
     @SuppressWarnings("unchecked")
-    void payCallbackFailureMarksFailed() {
+    void payCallbackFailureKeepsSuccessRecord() {
         OrderDTO dto = createdOrder();
         when(restTemplate.exchange(anyString(), any(), any(), any(ParameterizedTypeReference.class)))
                 .thenAnswer(inv -> {
@@ -119,10 +127,11 @@ class PaymentServiceImplTest {
         BusinessException ex = assertThrows(BusinessException.class,
                 () -> service.pay(2L, "20261030151932907564"));
         assertEquals(500, ex.getCode());
-        // 失败后支付记录置为 FAILED
+        // 流水保持 SUCCESS（资金事实不因业务同步失败被抹掉）
         ArgumentCaptor<Payment> captor = ArgumentCaptor.forClass(Payment.class);
-        verify(paymentMapper).updateById(captor.capture());
-        assertEquals("FAILED", captor.getValue().getStatus());
+        verify(paymentMapper, times(1)).updateById(captor.capture());
+        assertEquals("SUCCESS", captor.getValue().getStatus());
+        assertNotNull(captor.getValue().getPaidAt());
     }
 
     @Test

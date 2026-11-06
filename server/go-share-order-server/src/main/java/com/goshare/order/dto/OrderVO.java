@@ -21,6 +21,15 @@ public class OrderVO {
 
     private Integer seatCount;
 
+    /** 上车站点序号（阶段1区间库存） */
+    private Integer fromStopSeq;
+
+    /** 下车站点序号（阶段1区间库存） */
+    private Integer toStopSeq;
+
+    /** 订单区间里程（公里） */
+    private BigDecimal distanceKm;
+
     private BigDecimal totalPrice;
 
     private BigDecimal couponDiscount;
@@ -36,6 +45,12 @@ public class OrderVO {
     private String paymentNo;
 
     private String cancelReason;
+
+    /** 退款单号（已支付订单取消后产生，阶段2退款域） */
+    private String refundNo;
+
+    /** 退款金额（元） */
+    private BigDecimal refundAmount;
 
     private LocalDateTime createdAt;
 

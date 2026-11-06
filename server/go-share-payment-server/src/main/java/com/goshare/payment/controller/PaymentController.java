@@ -2,6 +2,7 @@ package com.goshare.payment.controller;
 
 import com.goshare.common.result.Result;
 import com.goshare.common.security.CurrentUserResolver;
+import com.goshare.common.security.InternalApi;
 import com.goshare.payment.dto.PayRequest;
 import com.goshare.payment.dto.PaymentVO;
 import com.goshare.payment.service.PaymentService;
@@ -14,6 +15,8 @@ import org.springframework.web.bind.annotation.RequestBody;
 import org.springframework.web.bind.annotation.RequestHeader;
 import org.springframework.web.bind.annotation.RequestMapping;
 import org.springframework.web.bind.annotation.RestController;
+
+import java.util.Map;
 
 /**
  * 支付接口：发起模拟支付、查询支付结果
@@ -38,5 +41,15 @@ public class PaymentController {
     @GetMapping("/{paymentNo}")
     public Result<PaymentVO> detail(@PathVariable("paymentNo") String paymentNo) {
         return Result.success(paymentService.getByPaymentNo(paymentNo));
+    }
+
+    /** 退款（阶段2退款域：订单服务内部调用，非用户 API） */
+    @InternalApi
+    @PostMapping("/refund")
+    public Result<Boolean> refund(@RequestBody Map<String, Object> body) {
+        String paymentNo = String.valueOf(body.get("paymentNo"));
+        java.math.BigDecimal amount = body.get("amount") == null
+                ? null : new java.math.BigDecimal(String.valueOf(body.get("amount")));
+        return Result.success(paymentService.refund(paymentNo, amount));
     }
 }

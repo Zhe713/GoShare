@@ -2,6 +2,7 @@ package com.goshare.order.service.impl;
 
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
 import com.fasterxml.jackson.databind.ObjectMapper;
+import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.goshare.common.exception.BusinessException;
 import com.goshare.common.result.Result;
 import com.goshare.order.dto.OrderCreateRequest;
@@ -10,8 +11,13 @@ import com.goshare.order.dto.TripDTO;
 import com.goshare.order.entity.IdempotencyRecord;
 import com.goshare.order.entity.TripOrder;
 import com.goshare.order.mapper.IdempotencyRecordMapper;
+import com.goshare.order.mapper.OrderReviewMapper;
+import com.goshare.order.mapper.PriceStatsMapper;
+import com.goshare.order.mapper.RefundOrderMapper;
+import com.goshare.order.mapper.RefundTransactionMapper;
 import com.goshare.order.mapper.TripOrderMapper;
 import com.goshare.order.mapper.TripSeatMapper;
+import com.goshare.order.mapper.TripSegmentMapper;
 import org.apache.rocketmq.spring.core.RocketMQTemplate;
 import org.junit.jupiter.api.BeforeEach;
 import org.junit.jupiter.api.Test;
@@ -19,6 +25,8 @@ import org.mockito.ArgumentCaptor;
 import org.springframework.core.ParameterizedTypeReference;
 import org.springframework.data.redis.core.StringRedisTemplate;
 import org.springframework.data.redis.core.ZSetOperations;
+import org.springframework.http.HttpMethod;
+import org.springframework.http.HttpStatus;
 import org.springframework.http.ResponseEntity;
 import org.springframework.test.util.ReflectionTestUtils;
 import org.springframework.web.client.RestTemplate;
@@ -26,6 +34,7 @@ import org.springframework.web.client.RestTemplate;
 import java.math.BigDecimal;
 import java.time.LocalDateTime;
 import java.util.List;
+import java.util.Map;
 import java.util.Set;
 
 import static org.junit.jupiter.api.Assertions.*;
@@ -40,6 +49,11 @@ class OrderServiceImplTest {
     private TripOrderMapper orderMapper;
     private IdempotencyRecordMapper idempotencyMapper;
     private TripSeatMapper tripSeatMapper;
+    private TripSegmentMapper tripSegmentMapper;
+    private RefundOrderMapper refundOrderMapper;
+    private RefundTransactionMapper refundTransactionMapper;
+    private OrderReviewMapper orderReviewMapper;
+    private PriceStatsMapper priceStatsMapper;
     private StringRedisTemplate redisTemplate;
     private RestTemplate restTemplate;
     private ObjectMapper objectMapper;
@@ -52,17 +66,30 @@ class OrderServiceImplTest {
         orderMapper = mock(TripOrderMapper.class);
         idempotencyMapper = mock(IdempotencyRecordMapper.class);
         tripSeatMapper = mock(TripSeatMapper.class);
+        tripSegmentMapper = mock(TripSegmentMapper.class);
+        refundOrderMapper = mock(RefundOrderMapper.class);
+        refundTransactionMapper = mock(RefundTransactionMapper.class);
+        orderReviewMapper = mock(OrderReviewMapper.class);
+        priceStatsMapper = mock(PriceStatsMapper.class);
         redisTemplate = mock(StringRedisTemplate.class);
         restTemplate = mock(RestTemplate.class);
         objectMapper = new ObjectMapper();
+        // 生产环境注入的是 Spring Boot 配置好的 ObjectMapper（已注册 JavaTimeModule），
+        // 单测里必须手动注册，否则幂等快照里的 LocalDateTime 无法序列化
+        objectMapper.registerModule(new JavaTimeModule());
         rocketMQTemplate = mock(RocketMQTemplate.class);
         service = new OrderServiceImpl(orderMapper, idempotencyMapper, tripSeatMapper,
+                tripSegmentMapper, refundOrderMapper, refundTransactionMapper, orderReviewMapper,
+                priceStatsMapper,
                 redisTemplate, restTemplate, objectMapper, rocketMQTemplate);
         ReflectionTestUtils.setField(service, "tripServiceUrl", "http://trip:8002");
         ReflectionTestUtils.setField(service, "timeoutMinutes", 10L);
         ReflectionTestUtils.setField(service, "scheduledTimeoutMinutes", 12L);
         ReflectionTestUtils.setField(service, "marketingServiceUrl", "http://marketing:8004");
         when(redisTemplate.opsForZSet()).thenReturn(mock(ZSetOperations.class));
+        // 默认：无区间数据（selectCoveredSegments 返回空），走全程标量扣减，兼容既有测试
+        when(tripSegmentMapper.selectCoveredSegments(anyLong(), anyInt(), anyInt())).thenReturn(List.of());
+        when(tripSeatMapper.deductSeat(anyLong(), anyInt())).thenReturn(1);
     }
 
     private TripDTO futureTrip() {
@@ -173,18 +200,35 @@ class OrderServiceImplTest {
     }
 
     @Test
-    void cancelRejectsNonCreatedOrder() {
+    void cancelPaidOrderGoesToRefund() {
         TripOrder order = new TripOrder();
         order.setId(1L);
         order.setOrderNo("20261030151932907564");
         order.setPassengerId(2L);
         order.setTripId(5L);
         order.setSeatCount(1);
+        order.setTotalPrice(new BigDecimal("60"));
+        order.setPayPrice(new BigDecimal("60"));
         order.setStatus("PAID");
         when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(order);
-        BusinessException ex = assertThrows(BusinessException.class,
-                () -> service.cancel(2L, "20261030151932907564"));
-        assertEquals(400, ex.getCode());
+        // 已支付订单取消 → 走退款闭环：需要行程服务返回发车时间（用于算违约金）
+        TripDTO trip = futureTrip();
+        mockFetchTrip(trip);
+        when(orderMapper.update(any(), any())).thenReturn(1);
+        when(tripSeatMapper.restoreSeat(anyLong(), anyInt())).thenReturn(1);
+        when(redisTemplate.opsForZSet().range(anyString(), eq(0L), eq(0L))).thenReturn(Set.of());
+        // 退款：支付服务退款成功
+        when(restTemplate.exchange(contains("/api/payment/refund"), any(), any(),
+                any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(Result.success(true)));
+
+        OrderVO vo = service.cancel(2L, "20261030151932907564");
+
+        // 退款成功 → 订单 REFUNDED
+        assertEquals("REFUNDED", vo.getStatus());
+        // 落退款单 + 退款流水
+        verify(refundOrderMapper).insert(any(com.goshare.order.entity.RefundOrder.class));
+        verify(refundTransactionMapper).insert(any(com.goshare.order.entity.RefundTransaction.class));
     }
 
     @Test
@@ -197,6 +241,8 @@ class OrderServiceImplTest {
         order.setSeatCount(2);
         order.setStatus("CREATED");
         when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(order);
+        // CAS：状态更新必须影响 1 行才算成功（并发冲突时返回 0）
+        when(orderMapper.update(any(), any())).thenReturn(1);
         when(tripSeatMapper.restoreSeat(5L, 2)).thenReturn(1);
         when(redisTemplate.opsForZSet().range(anyString(), eq(0L), eq(0L))).thenReturn(Set.of());
 
@@ -246,9 +292,18 @@ class OrderServiceImplTest {
         order.setPassengerId(2L);
         order.setTripId(5L);
         order.setStatus("CREATED");
+        order.setPayPrice(new BigDecimal("90.00"));
         when(idempotencyMapper.selectOne(any(Wrapper.class))).thenReturn(null);
         when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(order);
         when(orderMapper.update(any(), any())).thenReturn(1);
+        // 回调现在会回查支付流水：必须是 SUCCESS、同订单、金额一致
+        Result<Map<String, Object>> paymentResp = Result.success(Map.of(
+                "status", "SUCCESS",
+                "orderNo", "20261030151932907564",
+                "amount", "90.00"));
+        when(restTemplate.exchange(anyString(), eq(HttpMethod.GET), any(),
+                any(ParameterizedTypeReference.class)))
+                .thenReturn(new ResponseEntity<>(paymentResp, HttpStatus.OK));
 
         OrderVO vo = service.handlePayCallback("20261030151932907564", "P-001");
 
@@ -339,6 +394,7 @@ class OrderServiceImplTest {
         order.setSeatCount(2);
         order.setStatus("CREATED");
         when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(order);
+        when(orderMapper.update(any(), any())).thenReturn(1);
         when(tripSeatMapper.restoreSeat(5L, 2)).thenReturn(1);
         when(redisTemplate.opsForZSet().range(anyString(), eq(0L), eq(0L))).thenReturn(Set.of());
 
@@ -374,5 +430,99 @@ class OrderServiceImplTest {
         assertEquals(0, vo.getPayPrice().compareTo(new BigDecimal("55.00")));
         assertEquals("CREATED", vo.getStatus());
         verify(idempotencyMapper).insert(any(IdempotencyRecord.class));
+    }
+
+    // ---------- F4 改签 ----------
+
+    private TripOrder paidOrder() {
+        TripOrder order = new TripOrder();
+        order.setId(9L);
+        order.setOrderNo("20261105140742233293");
+        order.setPassengerId(3L);
+        order.setTripId(5L);
+        order.setSeatCount(1);
+        order.setFromStopSeq(0);
+        order.setToStopSeq(1);
+        order.setTotalPrice(new BigDecimal("60"));
+        order.setPayPrice(new BigDecimal("60"));
+        order.setStatus("PAID");
+        return order;
+    }
+
+    private TripDTO paidOrderTrip() {
+        TripDTO trip = futureTrip();
+        trip.setId(5L);
+        trip.setFromCity("石家庄");
+        trip.setToCity("邯郸");
+        return trip;
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void rescheduleSuccessRefundsDiff() {
+        when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(paidOrder());
+        // 原行程与目标行程（同线路、未来、可预订）
+        TripDTO oldTrip = paidOrderTrip();
+        TripDTO newTrip = paidOrderTrip();
+        newTrip.setId(6L);
+        newTrip.setDepartureTime(LocalDateTime.now().plusHours(3));
+        when(restTemplate.exchange(contains("/api/trip/"), any(), any(),
+                any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(Result.success(oldTrip)), ResponseEntity.ok(Result.success(newTrip)));
+        // 新区间库存充足（Redis 闸门成功；无区间数据走全程 DB 扣减）
+        when(tripSegmentMapper.selectCoveredSegments(anyLong(), anyInt(), anyInt())).thenReturn(List.of());
+        when(redisTemplate.execute(any(), anyList(), any(Object[].class))).thenReturn(3L);
+        when(tripSeatMapper.deductSeat(eq(6L), anyInt())).thenReturn(1);
+        when(tripSeatMapper.restoreSeat(eq(5L), anyInt())).thenReturn(1);
+        // CAS 更新成功
+        when(orderMapper.update(any(), any())).thenReturn(1);
+
+        OrderVO vo = service.reschedule(3L, "20261105140742233293", 6L, null, null);
+
+        assertEquals(6L, vo.getTripId());
+        // 新价 60 = 旧实付 60 → 无差额（refundAmount 为 null）
+        assertNull(vo.getRefundAmount());
+        // CAS 语句必须带 status=PAID 条件由实现保证；改签后原行程库存回补
+        verify(tripSeatMapper).restoreSeat(eq(5L), anyInt());
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void rescheduleRejectsDifferentRoute() {
+        when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(paidOrder());
+        TripDTO oldTrip = paidOrderTrip();
+        TripDTO newTrip = paidOrderTrip();
+        newTrip.setId(7L);
+        newTrip.setFromCity("北京");
+        newTrip.setToCity("上海");
+        when(restTemplate.exchange(contains("/api/trip/"), any(), any(),
+                any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(Result.success(oldTrip)), ResponseEntity.ok(Result.success(newTrip)));
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.reschedule(3L, "20261105140742233293", 7L, null, null));
+        assertTrue(ex.getMessage().contains("同线路"));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void rescheduleRejectsWhenTargetSeatsInsufficient() {
+        when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(paidOrder());
+        TripDTO oldTrip = paidOrderTrip();
+        TripDTO newTrip = paidOrderTrip();
+        newTrip.setId(6L);
+        newTrip.setDepartureTime(LocalDateTime.now().plusHours(3));
+        when(restTemplate.exchange(contains("/api/trip/"), any(), any(),
+                any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(Result.success(oldTrip)), ResponseEntity.ok(Result.success(newTrip)));
+        // Redis 闸门返回 -1（余座不足）
+        when(tripSegmentMapper.selectCoveredSegments(anyLong(), anyInt(), anyInt())).thenReturn(List.of());
+        when(redisTemplate.execute(any(), anyList(), any(Object[].class))).thenReturn(-1L);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.reschedule(3L, "20261105140742233293", 6L, null, null));
+        assertTrue(ex.getMessage().contains("余座不足"));
+        // 库存未动：订单不应被更新
+        verify(orderMapper, never()).update(any(), any());
     }
 }

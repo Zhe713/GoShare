@@ -69,9 +69,11 @@ public class ShardingDataSourceConfig {
         tableRule.setKeyGenerateStrategy(
                 new KeyGenerateStrategyConfiguration("id", "snowflake"));
 
-        // 未参与分片的表（幂等记录、行程余座表等）显式声明，全部走默认数据源 goshare
+        // 未参与分片的表（幂等记录、行程余座表、区间库存、退款单等）显式声明，全部走默认数据源 goshare
         SingleRuleConfiguration singleRule = new SingleRuleConfiguration(
-                java.util.List.of("goshare.idempotency_key", "goshare.trip"), "goshare");
+                java.util.List.of("goshare.idempotency_key", "goshare.trip",
+                        "goshare.trip_segment", "goshare.refund_order", "goshare.refund_transaction",
+                        "goshare.order_review"), "goshare");
 
         // 3. 全局属性：控制台打印真实执行 SQL（方便演示路由结果）
         Properties props = new Properties();
