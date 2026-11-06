@@ -236,6 +236,13 @@ export GOSHARE_LLM_HTTP_URL=https://dashscope.aliyuncs.com/compatible-mode/v1/ch
 <p align="center"><sub>取消挽留与一键改签 · 月度行程账单 · 车主乘客管理</sub></p>
 
 <p align="center">
+  <img src="docs/images/publish-trip.png" width="240" alt="发布行程">
+  <img src="docs/images/order-detail.png" width="240" alt="订单详情">
+  <img src="docs/images/support.png" width="240" alt="客服工单">
+</p>
+<p align="center"><sub>车主发布行程（站点 + 车辆）· 订单详情 · 客服工单（AI 摘要 + 回复草稿）</sub></p>
+
+<p align="center">
   <img src="docs/images/screen.png" width="760" alt="运营数据大屏">
 </p>
 <p align="center"><sub>运营数据大屏（真实聚合数据）</sub></p>
