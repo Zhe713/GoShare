@@ -58,6 +58,49 @@ public class LunarService {
     }
 
     /**
+     * 下一个农历节日的公历日期（F6 节假日出行日历用）：找不到返回 null。
+     */
+    public LocalDate nextFestivalDate(LocalDate from, int lunarMonth, int lunarDay) {
+        Solar target = nextLunarDay(from == null ? LocalDate.now() : from, lunarMonth, lunarDay);
+        return target == null ? null : LocalDate.of(target.getYear(), target.getMonth(), target.getDay());
+    }
+
+    /**
+     * 节假日出行建议（F6，确定性文案，规则层与工具层共用）：
+     * 天数来自离线历法（0 token），阶段建议只用确定性事实（节前一周是高峰），
+     * 不含任何编造数字（如"往年加价30%"——没有统计数据就不说数）。
+     */
+    public String holidayTravelText(LocalDate today, String festival, LocalDate festivalDate) {
+        if (festivalDate == null) {
+            return null;
+        }
+        long days = ChronoUnit.DAYS.between(today, festivalDate);
+        StringBuilder sb = new StringBuilder();
+        sb.append("距离").append(festival).append("（").append(festivalDate.getYear()).append("年")
+                .append(festivalDate.getMonthValue()).append("月").append(festivalDate.getDayOfMonth()).append("日）还有 ")
+                .append(days).append(" 天。");
+        if (days <= 7 && days >= 0) {
+            sb.append(festival).append("前后是全年出行高峰，班次紧张，建议立即发布或预订行程。");
+        } else if (days <= 30) {
+            sb.append(festival).append("临近，出行需求会明显上升，建议提前发布行程或预订班次。");
+        } else {
+            sb.append("节前一周是出行高峰，届时班次紧张，建议提前规划。");
+        }
+        return sb.toString();
+    }
+
+    /**
+     * 公历节日的出行建议（F6）：清明 4/4、五一 5/1、国庆 10/1。
+     */
+    public String solarHolidayTravelText(LocalDate today, String festival, int month, int day) {
+        LocalDate d = LocalDate.of(today.getYear(), month, day);
+        if (d.isBefore(today)) {
+            d = LocalDate.of(today.getYear() + 1, month, day);
+        }
+        return holidayTravelText(today, festival, d);
+    }
+
+    /**
      * 干支纪年描述：如「今年是丙午（马）年，今天是农历九月廿五。」
      */
     public String yearText(LocalDate date) {

@@ -100,6 +100,9 @@ public class WorkOrderService {
 
     /** 创建模拟工单 + 会话（演示数据） */
     public WorkOrderAnalyzeVO createMock(String orderNo, List<String> messages) {
+        if (messages == null || messages.isEmpty()) {
+            throw new BusinessException(400, "工单消息不能为空");
+        }
         WorkOrder order = workOrderMapper.selectOne(
                 new LambdaQueryWrapper<WorkOrder>().eq(WorkOrder::getOrderNo, orderNo));
         if (order == null) {

@@ -7,6 +7,8 @@ import com.goshare.assistant.llm.TripRuleProvider;
 import com.goshare.assistant.llm.WeatherRuleProvider;
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
 import java.util.List;
 import java.util.Map;
 
@@ -52,7 +54,9 @@ class ToolRegistryTest {
         String result = registry.execute("get_festival_countdown", "{\"festival\":\"春节\"}");
         assertTrue(result.contains("春节"), result);
         assertTrue(result.contains("2027年2月6日"), result);
-        assertTrue(result.contains("还有 95 天"), result);
+        // 天数随运行日变化，动态计算而不是写死「还有 95 天」
+        long days = ChronoUnit.DAYS.between(LocalDate.now(), LocalDate.of(2027, 2, 6));
+        assertTrue(result.contains("还有 " + days + " 天"), result);
     }
 
     @Test
@@ -73,9 +77,11 @@ class ToolRegistryTest {
     @Test
     void executesDateCalcWeekdayDeterministically() {
         ToolRegistry registry = registry(mock(TripRuleProvider.class), mock(WeatherRuleProvider.class));
-        // 2026-11-03 是周二，42 天后 2026-12-15 仍是周二（模型曾口头算成周一）
+        // 2026-12-15 是周二（模型曾口头算成周一）；「距今天还有 N 天」随运行日变化，
+        // 因此只对固定的日期+星期做精确断言，天数用正则宽松匹配
         String result = registry.execute("get_date_calc", "{\"date\":\"2026-12-15\"}");
-        assertEquals("2026年12月15日，周二。（距今天还有 42 天）", result);
+        assertTrue(result.startsWith("2026年12月15日，周二。"), result);
+        assertTrue(result.matches(".*（距今天还有 -?\\d+ 天）$"), result);
     }
 
     @Test

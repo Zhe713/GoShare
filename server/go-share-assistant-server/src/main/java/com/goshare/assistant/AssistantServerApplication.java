@@ -7,7 +7,7 @@ import org.springframework.scheduling.annotation.EnableScheduling;
 /**
  * 出行助手服务启动类
  */
-@SpringBootApplication
+@SpringBootApplication(scanBasePackages = "com.goshare")
 @EnableScheduling
 public class AssistantServerApplication {
 

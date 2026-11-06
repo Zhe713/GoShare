@@ -54,7 +54,7 @@ public class CancelRetentionService {
     /**
      * 取消挽留预览：费用解释 + 替代方案 + 挽留话术（幂等：同一订单只推一次）
      */
-    public CancelRetentionVO preview(String orderNo) {
+    public CancelRetentionVO preview(Long userId, String orderNo) {
         CancelRetentionVO vo = new CancelRetentionVO();
 
         // 1. 挽留幂等：同一订单只挽留一次（Redis 标记；Redis 不可用时降级为首次挽留）
@@ -68,10 +68,10 @@ public class CancelRetentionService {
         vo.setAlreadyRetained(!firstTime);
 
         // 2. 费用明细：order 服务 FeeCalculator 纯 Java 计算（金额不靠 LLM）
-        vo.setFee(fetchFee(orderNo));
+        vo.setFee(fetchFee(userId, orderNo));
 
         // 3. 替代方案：同路线未来可订行程（排除当前行程）
-        List<CancelRetentionVO.Alternative> alternatives = fetchAlternatives(orderNo);
+        List<CancelRetentionVO.Alternative> alternatives = fetchAlternatives(userId, orderNo);
         vo.setAlternatives(alternatives);
 
         // 4. 挽留话术：LLM 生成（mock 可插拔；金额/行程数据由代码注入，LLM 不参与算账）
@@ -80,13 +80,13 @@ public class CancelRetentionService {
     }
 
     /** 调 order 服务拿费用明细 */
-    private CancelRetentionVO.FeePreview fetchFee(String orderNo) {
+    private CancelRetentionVO.FeePreview fetchFee(Long userId, String orderNo) {
         try {
             HttpHeaders headers = new HttpHeaders();
             headers.setContentType(MediaType.APPLICATION_JSON);
             Map<String, String> body = Map.of("orderNo", orderNo);
             Result<Map<String, Object>> resp = restTemplate.exchange(
-                            orderUrl + "/api/order/cancel-preview", HttpMethod.POST,
+                            orderUrl + "/api/order/internal/cancel-preview?passengerId=" + userId, HttpMethod.POST,
                             new HttpEntity<>(body, headers),
                             new ParameterizedTypeReference<Result<Map<String, Object>>>() {
                             })
@@ -114,11 +114,11 @@ public class CancelRetentionService {
     }
 
     /** 替代方案：订单行程同路线、出发时间更晚的可订行程 */
-    private List<CancelRetentionVO.Alternative> fetchAlternatives(String orderNo) {
+    private List<CancelRetentionVO.Alternative> fetchAlternatives(Long userId, String orderNo) {
         try {
             // 订单 → 行程ID
             Result<OrderDetailVO> orderResp = restTemplate.exchange(
-                            orderUrl + "/api/order/" + orderNo, HttpMethod.GET, null,
+                            orderUrl + "/api/order/internal/" + orderNo + "?passengerId=" + userId, HttpMethod.GET, null,
                             new ParameterizedTypeReference<Result<OrderDetailVO>>() {
                             })
                     .getBody();

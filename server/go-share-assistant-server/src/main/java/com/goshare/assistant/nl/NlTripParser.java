@@ -7,6 +7,7 @@ import java.time.LocalDate;
 import java.time.format.TextStyle;
 import java.util.List;
 import java.util.Locale;
+import java.util.Map;
 import java.util.regex.Matcher;
 import java.util.regex.Pattern;
 
@@ -28,11 +29,11 @@ public final class NlTripParser {
             "石家庄", "邯郸", "北京", "天津", "保定", "邢台", "唐山", "廊坊",
             "衡水", "沧州", "秦皇岛", "承德", "张家口", "上海", "广州", "深圳");
 
-    /** 路线句式：从X到Y / X去Y / 去Y / 回Y */
+    /** 路线句式：从X(间插少量字)到Y —— 口语常为「从石家庄订明天去邯郸」，不要求紧邻 */
     private static final Pattern ROUTE = Pattern.compile(
-            "从\\s*([\\u4e00-\u9fa5]{2,4})\\s*(?:到|去|至|回)\\s*([\\u4e00-\u9fa5]{2,4})");
-    private static final Pattern GO_TO = Pattern.compile("(?:去|到|前往)\\s*([\\u4e00-\u9fa5]{2,4})(?!市)");
-    private static final Pattern BACK = Pattern.compile("回\\s*([\\u4e00-\u9fa5]{2,4})");
+            "从\\s*([\\u4e00-\u9fa5]{2,6})[\\u4e00-\u9fa5]{0,3}?(?:到|去|至|回)\\s*([\\u4e00-\u9fa5]{2,6})");
+    private static final Pattern FROM = Pattern.compile("从\\s*([\\u4e00-\u9fa5]{2,6})");
+    private static final Pattern GO_TO = Pattern.compile("(?:去|到|前往|至|回)\\s*([\\u4e00-\u9fa5]{2,6})");
 
     /** 日期句式：今天/明天/后天/周X/本周X */
     private static final Pattern REL_DAY = Pattern.compile("(今天|明天|后天)");
@@ -45,6 +46,12 @@ public final class NlTripParser {
     /** 偏好句式 */
     private static final Pattern LUGGAGE = Pattern.compile("(大件|大行李箱|行李)");
     private static final Pattern CHEAP = Pattern.compile("(便宜|划算|性价比|省钱)");
+
+    /** 人数句式（F1 对话式下单）："两个人"/"两人"/"2个人"/"三个座位"/"3人" */
+    private static final Pattern SEAT_COUNT = Pattern.compile(
+            "([一二两三四五六七八九\\d])\\s*(?:个|位)?\\s*(?:人|座|座位)");
+    private static final Map<String, Integer> CN_NUM = Map.of(
+            "一", 1, "两", 2, "二", 2, "三", 3, "四", 4, "五", 5, "六", 6, "七", 7, "八", 8, "九", 9);
 
     private NlTripParser() {
     }
@@ -59,26 +66,32 @@ public final class NlTripParser {
         }
         String t = text.trim();
 
-        // 1. 路线
+        // 1. 路线（优先整句 ROUTE；失败时用独立 FROM/TO 兜底；
+        //    捕获串经 matchCity 做词典前缀截断，容忍「去邯郸的」「石家庄订」等口语后缀）
         Matcher route = ROUTE.matcher(t);
+        String from = null;
+        String to = null;
         if (route.find()) {
-            String from = route.group(1);
-            String to = route.group(2);
-            if (CITIES.contains(from)) {
-                query.setFromCity(from);
+            from = matchCity(route.group(1));
+            to = matchCity(route.group(2));
+        }
+        if (from == null) {
+            Matcher f = FROM.matcher(t);
+            if (f.find()) {
+                from = matchCity(f.group(1));
             }
-            if (CITIES.contains(to)) {
-                query.setToCity(to);
+        }
+        if (to == null) {
+            Matcher g = GO_TO.matcher(t);
+            if (g.find()) {
+                to = matchCity(g.group(1));
             }
-        } else {
-            Matcher go = GO_TO.matcher(t);
-            if (go.find() && CITIES.contains(go.group(1))) {
-                query.setToCity(go.group(1));
-            }
-            Matcher back = BACK.matcher(t);
-            if (back.find() && CITIES.contains(back.group(1))) {
-                query.setFromCity(back.group(1));
-            }
+        }
+        if (from != null) {
+            query.setFromCity(from);
+        }
+        if (to != null) {
+            query.setToCity(to);
         }
 
         // 2. 日期（基于今天）
@@ -135,6 +148,16 @@ public final class NlTripParser {
             query.setPreferCheap(Boolean.TRUE);
         }
 
+        // 5. 人数（F1 对话式下单；1~6 人，超出按 6 截断）
+        Matcher seat = SEAT_COUNT.matcher(t);
+        if (seat.find()) {
+            String n = seat.group(1);
+            int count = CN_NUM.containsKey(n) ? CN_NUM.get(n) : Integer.parseInt(n);
+            if (count >= 1) {
+                query.setSeatCount(Math.min(count, 6));
+            }
+        }
+
         log.info("[nl-parser] 输入={} 结构化={}", t, query);
         return query;
     }
@@ -150,5 +173,22 @@ public final class NlTripParser {
             case "日", "天" -> DayOfWeek.SUNDAY;
             default -> null;
         };
+    }
+
+    /**
+     * 词典前缀截断匹配：口语捕获串常带后缀（「去邯郸的」「石家庄订」），
+     * 从 4 字到 2 字逐级取前缀尝试命中城市词典。
+     */
+    private static String matchCity(String raw) {
+        if (raw == null) {
+            return null;
+        }
+        for (int len = Math.min(raw.length(), 4); len >= 2; len--) {
+            String candidate = raw.substring(0, len);
+            if (CITIES.contains(candidate)) {
+                return candidate;
+            }
+        }
+        return null;
     }
 }

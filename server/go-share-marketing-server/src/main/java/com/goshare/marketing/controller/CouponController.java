@@ -2,6 +2,7 @@ package com.goshare.marketing.controller;
 
 import com.goshare.common.result.Result;
 import com.goshare.common.security.CurrentUserResolver;
+import com.goshare.common.security.InternalApi;
 import com.goshare.marketing.dto.ReceiveRequest;
 import com.goshare.marketing.dto.CouponVO;
 import com.goshare.marketing.dto.SettleRequest;
@@ -48,6 +49,7 @@ public class CouponController {
     }
 
     /** 用券结算（订单服务下单时调用，锁定券并返回抵扣金额） */
+    @InternalApi
     @PostMapping("/settle")
     public Result<SettleResult> settle(@RequestBody @Valid SettleRequest request) {
         return Result.success(couponService.settle(
@@ -55,6 +57,7 @@ public class CouponController {
     }
 
     /** 确认用券（订单服务支付成功回调时调用） */
+    @InternalApi
     @PostMapping("/confirm")
     public Result<Void> confirm(@RequestBody @Valid CouponActionRequest request) {
         couponService.confirmUse(request.getUserId(), request.getCouponId(), request.getOrderNo());
@@ -62,6 +65,7 @@ public class CouponController {
     }
 
     /** 退券（订单服务取消/超时关闭时调用） */
+    @InternalApi
     @PostMapping("/return")
     public Result<Void> returnCoupon(@RequestBody @Valid CouponActionRequest request) {
         couponService.returnCoupon(request.getUserId(), request.getCouponId(), request.getOrderNo());

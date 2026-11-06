@@ -71,7 +71,7 @@ class CancelRetentionServiceTest {
     @SuppressWarnings("unchecked")
     void previewBuildsFeeAlternativesAndPitch() {
         // 1. 费用明细接口
-        when(restTemplate.exchange(contains("/api/order/cancel-preview"), any(), any(),
+        when(restTemplate.exchange(contains("/api/order/internal/cancel-preview"), any(), any(),
                 any(ParameterizedTypeReference.class)))
                 .thenReturn(ResponseEntity.ok(Result.success(Map.of(
                         "orderNo", "20261030151932907564",
@@ -87,7 +87,7 @@ class CancelRetentionServiceTest {
         // 2. 订单详情接口
         OrderDetailVO orderDetail = new OrderDetailVO();
         orderDetail.setTripId(5L);
-        when(restTemplate.exchange(contains("/api/order/20261030151932907564"), any(), any(),
+        when(restTemplate.exchange(contains("/api/order/internal/20261030151932907564"), any(), any(),
                 any(ParameterizedTypeReference.class)))
                 .thenReturn(ResponseEntity.ok(Result.success(orderDetail)));
         // 3. 行程详情接口
@@ -106,7 +106,7 @@ class CancelRetentionServiceTest {
         when(llmClient.call(anyString(), eq(LlmClient.Tier.LARGE)))
                 .thenReturn(new LlmClient.LlmResponse("别急着取消，现在退没有扣费，还有更合适的时间可选。", 80, 40));
 
-        CancelRetentionVO vo = service.preview("20261030151932907564");
+        CancelRetentionVO vo = service.preview(2L, "20261030151932907564");
 
         assertFalse(vo.isAlreadyRetained());
         assertEquals("CREATED", vo.getFee().getStatus());
@@ -127,15 +127,15 @@ class CancelRetentionServiceTest {
     @Test
     void previewMarksAlreadyRetainedOnSecondCall() {
         when(redisTemplate.opsForValue().setIfAbsent(anyString(), anyString(), any())).thenReturn(false);
-        when(restTemplate.exchange(contains("/api/order/cancel-preview"), any(), any(),
+        when(restTemplate.exchange(contains("/api/order/internal/cancel-preview"), any(), any(),
                 any(ParameterizedTypeReference.class)))
                 .thenReturn(ResponseEntity.ok(Result.success(Map.of())));
-        when(restTemplate.exchange(contains("/api/order/20261030151932907564"), any(), any(),
+        when(restTemplate.exchange(contains("/api/order/internal/20261030151932907564"), any(), any(),
                 any(ParameterizedTypeReference.class)))
                 .thenReturn(ResponseEntity.ok(Result.success(null)));
         when(llmClient.call(anyString(), any())).thenReturn(new LlmClient.LlmResponse("话术", 1, 1));
 
-        CancelRetentionVO vo = service.preview("20261030151932907564");
+        CancelRetentionVO vo = service.preview(2L, "20261030151932907564");
 
         assertTrue(vo.isAlreadyRetained());
         // 第二次调用 Redis setIfAbsent 仍只发生一次（同一键）
@@ -150,7 +150,7 @@ class CancelRetentionServiceTest {
                 .thenThrow(new RuntimeException("order down"));
         when(llmClient.call(anyString(), any())).thenReturn(new LlmClient.LlmResponse("请再考虑一下，现在退没有额外损失。", 60, 30));
 
-        CancelRetentionVO vo = service.preview("20261030151932907564");
+        CancelRetentionVO vo = service.preview(2L, "20261030151932907564");
 
         assertNull(vo.getFee());
         assertTrue(vo.getAlternatives().isEmpty());

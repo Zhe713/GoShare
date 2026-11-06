@@ -2,6 +2,9 @@ package com.goshare.assistant.llm;
 
 import org.junit.jupiter.api.Test;
 
+import java.time.LocalDate;
+import java.time.temporal.ChronoUnit;
+
 import static org.junit.jupiter.api.Assertions.*;
 
 /**
@@ -29,11 +32,13 @@ class LunarRuleProviderTest {
     @Test
     void springFestivalQuestionReturnsRealCountdown() {
         // 历史幻觉：模型答「2027年春节是2月1日」；规则必须给确定性倒计时 2027-02-06
+        // 天数按运行日动态计算，写死「还有 95 天」会导致跨天后必然失败
         String answer = provider.maybeAnswer("离过年还有几天");
         assertNotNull(answer);
         assertTrue(answer.contains("春节"));
         assertTrue(answer.contains("2027年2月6日"), answer);
-        assertTrue(answer.contains("还有 95 天"), answer);
+        long days = ChronoUnit.DAYS.between(LocalDate.now(), LocalDate.of(2027, 2, 6));
+        assertTrue(answer.contains("还有 " + days + " 天"), answer);
     }
 
     @Test

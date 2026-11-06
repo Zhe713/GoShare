@@ -29,9 +29,13 @@ public class NlTripQuery {
     /** 价格偏好：true=想便宜（排序权重用，不设硬性过滤） */
     private Boolean preferCheap;
 
+    /** 乘车人数（可空：未识别则默认 1 人）——F1 对话式下单用 */
+    private Integer seatCount;
+
     /** 是否识别出任何有效条件 */
     public boolean isEmpty() {
         return fromCity == null && toCity == null && departDate == null
-                && hourPrefer == null && largeLuggage == null && preferCheap == null;
+                && hourPrefer == null && largeLuggage == null && preferCheap == null
+                && seatCount == null;
     }
 }

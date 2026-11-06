@@ -33,10 +33,12 @@ goshare:
     secret: go-share-demo-jwt-secret-please-change-in-prod-0123456789
     expire-hours: 24
   llm:
-    # 模型接入方式：mock（默认，可演示零成本）| http（接真实 API，配置 http-url/api-key）
-    mode: http
-    http-url: https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
-    api-key: ${GOSHARE_LLM_API_KEY:REMOVED_SECRET}
+    # 模型接入方式：mock（默认，零成本可演示）| http（接真实 API，需通过环境变量配置 api-key）
+    # 开源默认 mock：无需任何密钥即可跑通全部功能（规则关卡 + 工具链均为确定性实现）
+    # 接真实模型：export GOSHARE_LLM_MODE=http; export GOSHARE_LLM_API_KEY=你的key
+    mode: ${GOSHARE_LLM_MODE:mock}
+    http-url: ${GOSHARE_LLM_HTTP_URL:https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions}
+    api-key: ${GOSHARE_LLM_API_KEY:}
     # 数据版本号：行程价格/余座/券规则变化时 +1，所有旧答案缓存自动作废（防止把旧数据答出去）
     data-version: 6
     # 模型档位：小模型（规则意图/轻量问答）/ 大模型（生成类）

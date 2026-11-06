@@ -33,6 +33,9 @@ public class LunarRuleProvider {
     /** 农历日期意图（避免误吞「农历年前后优惠」等非历法问法；「农历/黄历」后紧跟「年」不命中） */
     private static final Pattern LUNAR = Pattern.compile("农历(?!年)|阴历|老黄历|黄历(?!年)|几月初几");
 
+    /** F6 出行意图：节日问句 + 订票/出行/高峰等词 → 节假日出行建议（而非纯倒计时） */
+    private static final Pattern TRAVEL_INTENT = Pattern.compile("订票|出行|高峰|发布行程|预订|拼车|提前.*订|什么时候.*订");
+
     private final LunarService lunarService;
 
     /**
@@ -40,14 +43,33 @@ public class LunarRuleProvider {
      */
     public String maybeAnswer(String question) {
         LocalDate today = LocalDate.now();
+        boolean travel = TRAVEL_INTENT.matcher(question).find();
         if (SPRING_FESTIVAL.matcher(question).find()) {
+            // F6：节日 + 出行意图 → 出行建议（天数仍由离线历法确定性计算）
+            if (travel) {
+                LocalDate date = lunarService.nextFestivalDate(today, 1, 1);
+                return lunarService.holidayTravelText(today, "春节", date);
+            }
             return lunarService.springFestivalText(today);
         }
         if (FESTIVAL.matcher(question).find()) {
             Festival festival = festivalOf(question);
             if (festival != null) {
+                if (travel) {
+                    LocalDate date = lunarService.nextFestivalDate(today, festival.month(), festival.day());
+                    return lunarService.holidayTravelText(today, festival.name(), date);
+                }
                 return lunarService.festivalText(today, festival.name(), festival.month(), festival.day());
             }
+        }
+        if (travel && question.contains("清明")) {
+            return lunarService.solarHolidayTravelText(today, "清明节", 4, 4);
+        }
+        if (travel && (question.contains("五一") || question.contains("劳动节"))) {
+            return lunarService.solarHolidayTravelText(today, "劳动节", 5, 1);
+        }
+        if (travel && question.contains("国庆")) {
+            return lunarService.solarHolidayTravelText(today, "国庆节", 10, 1);
         }
         if (YEAR.matcher(question).find()) {
             return lunarService.yearText(today);
