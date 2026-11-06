@@ -167,7 +167,7 @@ async function onArrive(tripId: number, orderNo: string) {
 <style scoped>
 .driver {
   min-height: 100vh;
-  padding-bottom: 24px;
+  padding-bottom: var(--sp-3);
 }
 
 .driver__top {

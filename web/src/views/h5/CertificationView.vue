@@ -99,7 +99,7 @@ async function submit() {
 <style scoped>
 .cert {
   min-height: 100vh;
-  padding-bottom: 24px;
+  padding-bottom: var(--sp-3);
 }
 
 .cert__card {

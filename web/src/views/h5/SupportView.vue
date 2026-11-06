@@ -87,7 +87,7 @@ const CATEGORY_TEXT: Record<string, string> = {
 <style scoped>
 .support {
   min-height: 100vh;
-  padding-bottom: 24px;
+  padding-bottom: var(--sp-3);
 }
 
 .support__card {

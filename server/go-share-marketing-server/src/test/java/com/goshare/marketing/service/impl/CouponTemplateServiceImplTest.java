@@ -50,7 +50,9 @@ class CouponTemplateServiceImplTest {
     void createRejectsReversedTimeRange() {
         service = newService();
         TemplateCreateRequest r = req();
-        r.setEndTime(LocalDateTime.now().minusDays(1));
+        // 必须相对 startTime 反推：两次 now() 在纳秒精度机器上 endTime 可能比 startTime 晚几微秒，
+        // 会导致校验通过（本地 Windows 毫秒精度看不出问题，CI 上必现）
+        r.setEndTime(r.getStartTime().minusDays(1));
         BusinessException ex = assertThrows(BusinessException.class, () -> service.create(r));
         assertEquals(400, ex.getCode());
         verify(templateMapper, never()).insert(any(CouponTemplate.class));
