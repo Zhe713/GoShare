@@ -14,10 +14,11 @@ export default defineConfig({
     trace: 'retain-on-failure',
   },
   // vite dev server 已手动启动（5173），复用现有实例
+  // 本地有 dev server 时直接复用；CI 里没有则由 playwright 自己拉起来（之前写 echo 会让 CI 报 exited early）
   webServer: {
-    command: 'echo reuse-existing',
+    command: 'npm run dev -- --host 127.0.0.1 --port 5173',
     url: 'http://localhost:5173',
     reuseExistingServer: true,
-    timeout: 10_000,
+    timeout: 120_000,
   },
 })

@@ -100,15 +100,6 @@ jobs:
             done
           done
           echo "backend ports ready"
-      - name: 启动 vite dev server
-        run: |
-          nohup npx vite --config vite.config.ts > vite.log 2>&1 &
-          for i in $(seq 1 30); do
-            if (echo > /dev/tcp/127.0.0.1/5173) 2>/dev/null; then break; fi
-            sleep 2
-          done
-          echo "vite ready"
-        working-directory: web
       - name: 安装前端依赖
         run: npm ci
         working-directory: web

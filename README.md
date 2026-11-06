@@ -5,6 +5,7 @@
 </p>
 
 <p align="center">
+  <a href="https://github.com/Zhe713/GoShare/actions/workflows/ci.yml"><img alt="CI" src="https://github.com/Zhe713/GoShare/actions/workflows/ci.yml/badge.svg"></a>
   <img alt="Java" src="https://img.shields.io/badge/Java-17-orange?logo=openjdk">
   <img alt="Spring Boot" src="https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen?logo=springboot">
   <img alt="Spring Cloud Alibaba" src="https://img.shields.io/badge/Spring%20Cloud%20Alibaba-Nacos%20%2B%20Gateway-1677ff">
