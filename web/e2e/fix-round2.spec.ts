@@ -121,6 +121,9 @@ test('券包新增可领秒杀券：限量/有效期信息展示且可领取', a
   // 有效期不为空：秒杀券「有效期至 截止 距结束…」、普通券「有效期至 领取后 X 天内有效」
   await expect(page.getByText('有效期至 截止').first()).toBeVisible()
   await expect(page.getByText(/有效期至 领取后/).first()).toBeVisible()
-  const claimBtn = page.getByRole('button', { name: '领取' }).first()
-  await expect(claimBtn).toBeEnabled()
+  // 领取按钮必须限定在「这张券」的卡片内：页面上其它券可能已被领过（disabled），
+  // 用全局 first() 会随数据顺序波动（CI 全新库就踩到过）
+  const flashCard = page.locator('.g-coupon').filter({ hasText: '限时秒杀立减6元' }).first()
+  await expect(flashCard).toBeVisible()
+  await expect(flashCard.getByRole('button', { name: '领取' })).toBeEnabled()
 })
