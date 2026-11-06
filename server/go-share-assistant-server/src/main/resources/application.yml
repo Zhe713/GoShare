@@ -33,9 +33,15 @@ goshare:
     secret: go-share-demo-jwt-secret-please-change-in-prod-0123456789
     expire-hours: 24
   llm:
-    # 模型接入方式：mock（默认，零成本可演示）| http（接真实 API，需通过环境变量配置 api-key）
+    # 模型接入方式：mock（默认，零成本可演示）| http（接真实 API）
     # 开源默认 mock：无需任何密钥即可跑通全部功能（规则关卡 + 工具链均为确定性实现）
-    # 接真实模型：export GOSHARE_LLM_MODE=http; export GOSHARE_LLM_API_KEY=你的key
+    #
+    # 三种配置 key 的方式（优先级从高到低）：
+    #   1) 环境变量：GOSHARE_LLM_MODE=http  GOSHARE_LLM_API_KEY=你的key（CI / 容器推荐）
+    #   2) 本地加密文件（推荐个人开发）：node scripts/llm-key.mjs set
+    #      → ~/.goshare/goshare-llm.properties 存 ENC: 密文，主密钥在 ~/.goshare/master.key
+    #      → 启动时由 LlmSecretEnvironmentPostProcessor 解密注入，明文不落盘、不进仓库
+    #   3) 直接改本文件（不推荐，容易误提交）
     mode: ${GOSHARE_LLM_MODE:mock}
     http-url: ${GOSHARE_LLM_HTTP_URL:https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions}
     api-key: ${GOSHARE_LLM_API_KEY:}

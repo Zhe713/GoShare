@@ -9,7 +9,7 @@
   <img alt="Spring Boot" src="https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen?logo=springboot">
   <img alt="Spring Cloud Alibaba" src="https://img.shields.io/badge/Spring%20Cloud%20Alibaba-Nacos%20%2B%20Gateway-1677ff">
   <img alt="Vue" src="https://img.shields.io/badge/Vue-3%20%2B%20TS%20strict-42b883?logo=vuedotjs">
-  <img alt="Unit Tests" src="https://img.shields.io/badge/unit%20tests-130%2B%20passing-success">
+  <img alt="Unit Tests" src="https://img.shields.io/badge/unit%20tests-295%20passing-success">
   <img alt="E2E" src="https://img.shields.io/badge/E2E-16%2F16%20passing-success">
   <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
 </p>
@@ -209,13 +209,37 @@ npm run dev              # 同端口三入口
 
 ### 5. AI 助手配置（可选）
 
-默认 `mock` 模式，**零密钥即可跑通全部功能**（规则关卡 + 工具链均为确定性实现）。接真实模型：
+默认 `mock` 模式，**零密钥即可跑通全部功能**（规则关卡 + 工具链均为确定性实现）。接真实模型二选一：
+
+**方式 A：本地加密保存（推荐，个人开发）**
+
+```bash
+node scripts/llm-key.mjs set     # 交互式粘贴 key，输入不回显
+node scripts/llm-key.mjs show    # 查看（key 打码）
+node scripts/llm-key.mjs clear   # 清除，回到 mock
+```
+
+key 不落明文、不进仓库：
+
+| 文件 | 内容 |
+|---|---|
+| `~/.goshare/goshare-llm.properties` | `goshare.llm.mode=http` + `api-key=ENC:...`（AES-256-GCM 密文） |
+| `~/.goshare/master.key` | 32 字节主密钥（与密文分文件存放，首次 `set` 自动生成） |
+
+服务启动时由 `LlmSecretEnvironmentPostProcessor` 解密注入，日志会打印一行
+`[llm-secret] 已加载本地加密 LLM 配置：mode=http，api-key=已解密`。
+两者都在仓库目录之外，天然不会被 commit；换机器需重新 `set`。
+
+**方式 B：环境变量（CI / 容器）**
 
 ```bash
 export GOSHARE_LLM_MODE=http
-export GOSHARE_LLM_API_KEY=你的key      # 阿里云百炼或任意 OpenAI 兼容端点
+export GOSHARE_LLM_API_KEY=你的key      # 或阿里云百炼 / 任意 OpenAI 兼容端点
 export GOSHARE_LLM_HTTP_URL=https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
 ```
+
+> 优先级：环境变量 > 本地加密文件 > `application.yml` 默认值（mock）。
+> 安全边界说明：本地加密防的是"明文被顺手拷走 / 误提交"，不是对抗本机管理员；生产请用 KMS。
 
 ---
 
@@ -316,7 +340,7 @@ bash scripts/load-test-segment.sh
 
 | 项 | 结果 |
 |---|---|
-| 后端单测 | 130+ 用例全绿；7 模块行覆盖 ≥ 70% |
+| 后端单测 | 295 用例全绿；7 模块行覆盖 ≥ 70%（JaCoCo 模块级门禁） |
 | 前端类型检查 | `vue-tsc` 0 错误 |
 | E2E | 16/16 通过（主链路 / 订单详情 / 券包 / 导航 / AI 对话 6 个 spec） |
 | 并发压测 | 50 并发抢 3 座：3 成功零超卖；Redis 与 DB 区间余座一致 |

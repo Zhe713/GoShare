@@ -140,4 +140,55 @@ class PaymentServiceImplTest {
         BusinessException ex = assertThrows(BusinessException.class, () -> service.getByPaymentNo("P1"));
         assertEquals(404, ex.getCode());
     }
+
+    // ---------- 退款域 ----------
+
+    private com.goshare.payment.entity.Payment payment(String status, String amount) {
+        com.goshare.payment.entity.Payment p = new com.goshare.payment.entity.Payment();
+        p.setPaymentNo("P202611060001");
+        p.setOrderNo("20261106000000000001");
+        p.setStatus(status);
+        p.setAmount(new BigDecimal(amount));
+        p.setChannel("MOCK");
+        return p;
+    }
+
+    @Test
+    void refundRejectsUnknownFlow() {
+        when(paymentMapper.selectOne(any())).thenReturn(null);
+        assertFalse(service.refund("P000", new BigDecimal("10")));
+    }
+
+    @Test
+    void refundRejectsNonSuccessPayment() {
+        when(paymentMapper.selectOne(any())).thenReturn(payment("FAILED", "40"));
+        assertFalse(service.refund("P202611060001", new BigDecimal("10")));
+    }
+
+    @Test
+    void refundRejectsAmountExceedingPaid() {
+        when(paymentMapper.selectOne(any())).thenReturn(payment("SUCCESS", "40"));
+        // 退款金额不能超过实付（防止改签/取消算错金额把钱多退出去）
+        assertFalse(service.refund("P202611060001", new BigDecimal("41")));
+    }
+
+    @Test
+    void refundMarksPaymentRefunded() {
+        com.goshare.payment.entity.Payment p = payment("SUCCESS", "40");
+        when(paymentMapper.selectOne(any())).thenReturn(p);
+
+        assertTrue(service.refund("P202611060001", new BigDecimal("33")));
+        assertEquals("REFUNDED", p.getStatus());
+        verify(paymentMapper).updateById(p);
+    }
+
+    @Test
+    void getByPaymentNoReturnsVo() {
+        when(paymentMapper.selectOne(any())).thenReturn(payment("SUCCESS", "40"));
+
+        com.goshare.payment.dto.PaymentVO vo = service.getByPaymentNo("P202611060001");
+
+        assertEquals("P202611060001", vo.getPaymentNo());
+        assertEquals("SUCCESS", vo.getStatus());
+    }
 }

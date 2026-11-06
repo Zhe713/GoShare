@@ -1,6 +1,9 @@
 package com.goshare.order.service.impl;
 
+import com.baomidou.mybatisplus.core.MybatisConfiguration;
 import com.baomidou.mybatisplus.core.conditions.Wrapper;
+import com.baomidou.mybatisplus.core.metadata.TableInfoHelper;
+import org.apache.ibatis.builder.MapperBuilderAssistant;
 import com.fasterxml.jackson.databind.ObjectMapper;
 import com.fasterxml.jackson.datatype.jsr310.JavaTimeModule;
 import com.goshare.common.exception.BusinessException;
@@ -45,6 +48,15 @@ import static org.mockito.Mockito.*;
  * 订单服务核心链路：下单幂等/余座校验/取消回补递补/支付回调幂等/超时关闭/候补登记
  */
 class OrderServiceImplTest {
+
+    static {
+        // LambdaUpdateWrapper 的 set(TripOrder::getStatus, ...) 需要实体元数据缓存；
+        // 纯单测没有 MyBatis 启动流程，手动初始化一次（订单 + 评价）
+        MapperBuilderAssistant assistant = new MapperBuilderAssistant(new MybatisConfiguration(), "");
+        TableInfoHelper.initTableInfo(assistant, TripOrder.class);
+        TableInfoHelper.initTableInfo(new MapperBuilderAssistant(new MybatisConfiguration(), ""),
+                com.goshare.order.entity.OrderReview.class);
+    }
 
     private TripOrderMapper orderMapper;
     private IdempotencyRecordMapper idempotencyMapper;
@@ -524,5 +536,219 @@ class OrderServiceImplTest {
         assertTrue(ex.getMessage().contains("余座不足"));
         // 库存未动：订单不应被更新
         verify(orderMapper, never()).update(any(), any());
+    }
+
+    // ---------- 退款闭环（已支付订单取消） ----------
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void cancelPaidOrderCreatesRefundAndMarksRefunded() {
+        when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(paidOrder());
+        when(restTemplate.exchange(contains("/api/trip/"), any(), any(),
+                any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(Result.success(paidOrderTrip())));
+        when(orderMapper.update(any(), any())).thenReturn(1);
+        // 支付服务退款成功
+        when(restTemplate.exchange(contains("/api/payment/refund"), any(), any(),
+                any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(Result.success(null)));
+
+        OrderVO vo = service.cancel(3L, "20261105140742233293");
+
+        // 已支付订单取消不再报错：落退款单 + 状态到 REFUNDED
+        assertEquals("REFUNDED", vo.getStatus());
+        assertNotNull(vo.getRefundNo());
+        assertNotNull(vo.getRefundAmount());
+        verify(refundOrderMapper).insert(any(com.goshare.order.entity.RefundOrder.class));
+        verify(refundTransactionMapper).insert(any(com.goshare.order.entity.RefundTransaction.class));
+        // 退款成功后回写退款单状态
+        verify(refundOrderMapper).updateById(any(com.goshare.order.entity.RefundOrder.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void cancelPaidOrderStaysRefundingWhenRefundFails() {
+        when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(paidOrder());
+        when(restTemplate.exchange(contains("/api/trip/"), any(), any(),
+                any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(Result.success(paidOrderTrip())));
+        when(orderMapper.update(any(), any())).thenReturn(1);
+        // 支付服务退款异常：订单停留在 REFUNDING，等对账重试（不能谎报已退款）
+        when(restTemplate.exchange(contains("/api/payment/refund"), any(), any(),
+                any(ParameterizedTypeReference.class)))
+                .thenThrow(new RuntimeException("payment down"));
+
+        OrderVO vo = service.cancel(3L, "20261105140742233293");
+
+        assertEquals("REFUNDING", vo.getStatus());
+        verify(refundOrderMapper).updateById(any(com.goshare.order.entity.RefundOrder.class));
+    }
+
+    @Test
+    @SuppressWarnings("unchecked")
+    void cancelPaidOrderDetectsConcurrentChange() {
+        when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(paidOrder());
+        when(restTemplate.exchange(contains("/api/trip/"), any(), any(),
+                any(ParameterizedTypeReference.class)))
+                .thenReturn(ResponseEntity.ok(Result.success(paidOrderTrip())));
+        // CAS 影响行数 0：并发下已被别的流程改状态
+        when(orderMapper.update(any(), any())).thenReturn(0);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.cancel(3L, "20261105140742233293"));
+
+        assertEquals(409, ex.getCode());
+    }
+
+    // ---------- 履约：乘客名单 / 上车 / 到达 / 评价 ----------
+
+    private TripDTO tripOwnedBy(long driverId) {
+        TripDTO trip = paidOrderTrip();
+        trip.setDriverId(driverId);
+        return trip;
+    }
+
+
+    @Test
+    void listByTripRejectsNonOwner() {
+        mockFetchTrip(tripOwnedBy(1L));
+
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.listByTrip(2L, 5L));
+
+        assertEquals(403, ex.getCode());
+    }
+
+    @Test
+    void listByTripReturnsPassengersForOwner() {
+        mockFetchTrip(tripOwnedBy(1L));
+        when(orderMapper.selectList(any(Wrapper.class))).thenReturn(List.of(paidOrder()));
+
+        List<OrderVO> list = service.listByTrip(1L, 5L);
+
+        assertEquals(1, list.size());
+        assertEquals("20261105140742233293", list.get(0).getOrderNo());
+    }
+
+    @Test
+    void boardMovesPaidToBoarded() {
+        mockFetchTrip(tripOwnedBy(1L));
+        when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(paidOrder());
+        when(orderMapper.update(any(), any())).thenReturn(1);
+
+        OrderVO vo = service.board(1L, 5L, "20261105140742233293");
+
+        assertEquals("BOARDED", vo.getStatus());
+    }
+
+    @Test
+    void boardRejectsWrongStatus() {
+        mockFetchTrip(tripOwnedBy(1L));
+        TripOrder created = paidOrder();
+        created.setStatus("CREATED");
+        when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(created);
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.board(1L, 5L, "20261105140742233293"));
+
+        assertEquals(400, ex.getCode());
+    }
+
+    @Test
+    void completeMovesBoardedToCompleted() {
+        mockFetchTrip(tripOwnedBy(1L));
+        TripOrder boarded = paidOrder();
+        boarded.setStatus("BOARDED");
+        when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(boarded);
+        when(orderMapper.update(any(), any())).thenReturn(1);
+
+        assertEquals("COMPLETED", service.complete(1L, 5L, "20261105140742233293").getStatus());
+    }
+
+    @Test
+    void reviewMovesCompletedToReviewed() {
+        mockFetchTrip(tripOwnedBy(1L));
+        TripOrder completed = paidOrder();
+        completed.setStatus("COMPLETED");
+        when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(completed);
+        when(orderReviewMapper.insert(any(com.goshare.order.entity.OrderReview.class))).thenReturn(1);
+        when(orderMapper.update(any(), any())).thenReturn(1);
+
+        OrderVO vo = service.review(3L, "20261105140742233293", 5, "车很干净");
+
+        assertEquals("REVIEWED", vo.getStatus());
+        verify(orderReviewMapper).insert(any(com.goshare.order.entity.OrderReview.class));
+    }
+
+    @Test
+    void reviewRejectsOutOfRangeRating() {
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.review(3L, "20261105140742233293", 6, "刷分"));
+        assertEquals(400, ex.getCode());
+        verify(orderReviewMapper, never()).insert(any(com.goshare.order.entity.OrderReview.class));
+    }
+
+    @Test
+    void reviewRejectsNotCompletedOrder() {
+        when(orderMapper.selectOne(any(Wrapper.class))).thenReturn(paidOrder());
+
+        BusinessException ex = assertThrows(BusinessException.class,
+                () -> service.review(3L, "20261105140742233293", 5, "还没到就评"));
+
+        assertEquals(400, ex.getCode());
+    }
+
+    // ---------- F5 行程账单 / F3 价格参谋 ----------
+
+    @Test
+    void tripBillAggregatesRealOrders() {
+        Map<String, Object> agg = Map.of(
+                "orderCount", 2,
+                "totalDistanceKm", new BigDecimal("807.7"),
+                "totalPay", new BigDecimal("269.70"));
+        when(orderMapper.aggregateBill(anyLong(), anyString(), anyString())).thenReturn(agg);
+        when(orderMapper.groupByTrip(anyLong(), anyString(), anyString()))
+                .thenReturn(List.of(Map.of("trip_id", 5L, "cnt", 2)));
+        when(orderMapper.selectTripCities(5L))
+                .thenReturn(Map.of("from_city", "石家庄", "to_city", "邯郸"));
+
+        com.goshare.order.dto.TripBillVO bill = service.tripBill(3L, "2026-11");
+
+        assertEquals("2026-11", bill.getMonth());
+        assertEquals(2, bill.getOrderCount());
+        assertEquals(0, bill.getTotalPay().compareTo(new BigDecimal("269.70")));
+        // 网约车基准 2.3 元/公里：807.7 × 2.3 = 1857.71
+        assertEquals(0, bill.getTaxiBenchmark().compareTo(new BigDecimal("1857.71")));
+        assertEquals(1, bill.getTopRoutes().size());
+        assertEquals("石家庄", bill.getTopRoutes().get(0).getFromCity());
+    }
+
+    @Test
+    void tripBillRejectsBadMonth() {
+        BusinessException ex = assertThrows(BusinessException.class, () -> service.tripBill(3L, "2026/11"));
+        assertEquals(400, ex.getCode());
+    }
+
+    @Test
+    void priceStatsComputesAvgMinMedian() {
+        when(priceStatsMapper.selectTripIds("石家庄", "邯郸")).thenReturn(List.of(5L, 6L));
+        when(priceStatsMapper.selectPayPrices(anyList(), eq(30)))
+                .thenReturn(List.of(new BigDecimal("40"), new BigDecimal("60"), new BigDecimal("80")));
+
+        com.goshare.order.dto.PriceStatsVO stats = service.priceStats("石家庄", "邯郸", 30);
+
+        assertEquals(3, stats.getOrderCount());
+        assertEquals(0, stats.getAvgPrice().compareTo(new BigDecimal("60.00")));
+        assertEquals(0, stats.getMinPrice().compareTo(new BigDecimal("40")));
+        assertEquals(0, stats.getMedianPrice().compareTo(new BigDecimal("60")));
+    }
+
+    @Test
+    void priceStatsReturnsEmptyWhenNoTrips() {
+        when(priceStatsMapper.selectTripIds(anyString(), anyString())).thenReturn(List.of());
+
+        com.goshare.order.dto.PriceStatsVO stats = service.priceStats("石家庄", "邯郸", 30);
+
+        assertEquals(0, stats.getOrderCount());
+        assertNull(stats.getMedianPrice());
     }
 }

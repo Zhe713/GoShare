@@ -119,23 +119,26 @@ public final class NlTripParser {
             }
         }
 
-        // 3. 时间段
+        // 3. 时间段（先判上下午再定小时：'下午3点' 必须是 15 点，不能当成凌晨 3 点）
+        Matcher session = SESSION.matcher(t);
+        String sessionWord = session.find() ? session.group(1) : null;
         Matcher hour = HOUR.matcher(t);
         if (hour.find()) {
             int h = Integer.parseInt(hour.group(1));
+            boolean pm = "下午".equals(sessionWord) || "晚上".equals(sessionWord) || "中午".equals(sessionWord);
+            if (pm && h < 12) {
+                h += 12;
+            }
             if (h <= 24) {
                 query.setHourPrefer(h);
             }
-        } else {
-            Matcher session = SESSION.matcher(t);
-            if (session.find()) {
-                switch (session.group(1)) {
-                    case "早上", "上午" -> query.setHourPrefer(9);
-                    case "中午" -> query.setHourPrefer(12);
-                    case "下午" -> query.setHourPrefer(15);
-                    case "晚上" -> query.setHourPrefer(20);
-                    default -> {
-                    }
+        } else if (sessionWord != null) {
+            switch (sessionWord) {
+                case "早上", "上午" -> query.setHourPrefer(9);
+                case "中午" -> query.setHourPrefer(12);
+                case "下午" -> query.setHourPrefer(15);
+                case "晚上" -> query.setHourPrefer(20);
+                default -> {
                 }
             }
         }

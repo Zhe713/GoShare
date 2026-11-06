@@ -29,6 +29,7 @@ jobs:
             server/go-share-marketing-server/target/site/jacoco/
             server/go-share-payment-server/target/site/jacoco/
             server/go-share-assistant-server/target/site/jacoco/
+            server/go-share-notify-server/target/site/jacoco/
 
   frontend:
     name: 前端 · 类型 / 单测 / 裸样式门禁
@@ -40,7 +41,7 @@ jobs:
       - uses: actions/checkout@v4
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: web/package-lock.json
       - name: 安装依赖
@@ -64,7 +65,7 @@ jobs:
           java-version: '17'
       - uses: actions/setup-node@v4
         with:
-          node-version: '20'
+          node-version: '22'
           cache: npm
           cache-dependency-path: web/package-lock.json
       - name: 启动基础设施（MySQL/Redis/ES/Nacos/RocketMQ）
