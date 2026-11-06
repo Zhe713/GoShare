@@ -4,6 +4,8 @@
 -- 执行方式：docker compose 首次启动自动执行，或手动 docker exec 执行
 -- ============================================
 
+SET NAMES utf8mb4;
+
 USE `goshare`;
 
 -- 1. 用户表

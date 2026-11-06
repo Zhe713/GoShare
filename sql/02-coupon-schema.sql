@@ -3,6 +3,8 @@
 -- 执行方式：docker exec 手动执行，或 docker compose 首次启动自动执行
 -- ============================================
 
+SET NAMES utf8mb4;
+
 USE `goshare`;
 
 -- 1. 优惠券模板表

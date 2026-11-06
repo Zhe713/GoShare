@@ -69,19 +69,27 @@ jobs:
           cache: npm
           cache-dependency-path: web/package-lock.json
       - name: 启动基础设施（MySQL/Redis/ES/Nacos/RocketMQ）
-        run: docker compose -f docker/docker-compose.yml up -d
+        # --wait：等所有带 healthcheck 的服务真正 healthy 再继续（否则 MySQL 初始化失败时脚本会静默继续）
+        run: docker compose -f docker/docker-compose.yml up -d --wait --wait-timeout 300
 
       - name: 等待中间件就绪（MySQL 建表 + Nacos 可注册）
         run: |
           # 不能用 mysqladmin ping 判断：初始化脚本执行期间 server 就已经能 ping 通，
           # 此时建表还没跑完，服务起来会 500。要等"表 + 种子数据"真的可用。
+          ready=0
           for i in $(seq 1 90); do
             if docker exec goshare-mysql mysql -uroot -proot123 -N -e \
                  "SELECT COUNT(*) FROM goshare.user WHERE phone='13900139000'" 2>/dev/null | grep -q '^1$'; then
-              echo "mysql schema + seed ready"; break
+              ready=1; echo "mysql schema + seed ready"; break
             fi
             sleep 2
           done
+          if [ "$ready" != "1" ]; then
+            echo "::error::MySQL 未就绪（建表或种子脚本可能失败）"
+            docker ps -a
+            docker logs --tail 120 goshare-mysql
+            exit 1
+          fi
           for i in $(seq 1 60); do
             code=$(curl -s -o /dev/null -w "%{http_code}" http://localhost:8848/nacos/ || true)
             if [ "$code" = "200" ] || [ "$code" = "302" ]; then echo "nacos ready"; break; fi

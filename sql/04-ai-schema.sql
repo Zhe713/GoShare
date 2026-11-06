@@ -6,6 +6,8 @@
 -- 执行方式：docker exec goshare-mysql mysql -uroot -proot123 < 本文件
 -- ============================================
 
+SET NAMES utf8mb4;
+
 USE `goshare`;
 
 -- 1. 用户表补充：车主信任分（0-5，A1 撮合排序特征；MySQL 8 不支持 ADD COLUMN IF NOT EXISTS，用 information_schema 动态判断）

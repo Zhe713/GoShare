@@ -5,6 +5,8 @@
 -- 说明：老表数据全部迁移后改名 trip_order_legacy 保留兜底，逻辑表由分片接管
 -- ============================================================
 
+SET NAMES utf8mb4;
+
 -- 1. 分片表 trip_order_0 / trip_order_1（结构与原表一致）
 CREATE TABLE IF NOT EXISTS `trip_order_0` (
   `id`             BIGINT        NOT NULL COMMENT '订单ID（分片引擎雪花生成）',
@@ -65,8 +67,8 @@ SET @sql_rename := IF(@rename_done = 0, 'RENAME TABLE trip_order TO trip_order_l
 PREPARE stmt_rn FROM @sql_rename; EXECUTE stmt_rn; DEALLOCATE PREPARE stmt_rn;
 
 -- 4. 校验：分片表数据量合计应与老表一致
-SELECT 'trip_order_0' AS 分片表, COUNT(*) AS 条数 FROM trip_order_0
+SELECT 'trip_order_0' AS shard_table, COUNT(*) AS cnt FROM trip_order_0
 UNION ALL
-SELECT 'trip_order_1', COUNT(*) FROM trip_order_1
+SELECT 'trip_order_1' AS shard_table, COUNT(*) AS cnt FROM trip_order_1
 UNION ALL
 SELECT 'trip_order_legacy(兜底)', COUNT(*) FROM trip_order_legacy;

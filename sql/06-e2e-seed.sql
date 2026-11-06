@@ -6,6 +6,8 @@
 -- 执行：docker exec -i goshare-mysql mysql -uroot -proot123 goshare < sql/06-e2e-seed.sql
 -- ============================================================
 
+SET NAMES utf8mb4;
+
 USE `goshare`;
 
 INSERT INTO coupon_template
