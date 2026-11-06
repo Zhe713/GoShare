@@ -40,3 +40,7 @@ reports/load-segment-*/
 
 # 本地助手工作目录（记忆、QA 临时产物，不入库）
 **/.workbuddy/
+
+# 个人求职材料（简历对照 / 面试准备，不入公开仓库）
+docs/GoShare-简历技术对照.md
+docs/GoShare-面试防穿透弹药.md
