@@ -56,6 +56,10 @@ jobs:
   e2e:
     name: E2E · 主链路（登录→语义搜索→下单→支付）+ AI 助手
     runs-on: ubuntu-latest
+    env:
+      # 与容器 TZ=Asia/Shanghai 对齐：否则 runner(UTC) 与 MySQL/服务时区不一致，
+      # 订单 created_at 会被算成 8 小时前，收银台直接显示"已超时"
+      TZ: Asia/Shanghai
     needs: [backend, frontend]
     steps:
       - uses: actions/checkout@v4
@@ -102,7 +106,8 @@ jobs:
           # 注册到 127.0.0.1：CI 上服务跑在宿主、Nacos 在容器，避免注册成不可路由的网卡地址
           for m in user trip order marketing payment notify assistant gateway; do
             nohup java -jar server/go-share-$m-server/target/go-share-$m-server-0.0.1-SNAPSHOT.jar \
-              --spring.cloud.nacos.discovery.ip=127.0.0.1 > logs-$m.txt 2>&1 &
+              --spring.cloud.nacos.discovery.ip=127.0.0.1 \
+              -Duser.timezone=Asia/Shanghai > logs-$m.txt 2>&1 &
           done
           for p in 8000 8001 8002 8003 8004 8005 8006 8007; do
             for i in $(seq 1 60); do

@@ -68,3 +68,51 @@ SELECT '周末满80减15', 'FULL_REDUCTION', 80.00, 15.00, 500, 0,
        NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY), 30, 0, '演示券模板'
 FROM DUAL
 WHERE NOT EXISTS (SELECT 1 FROM `coupon_template` WHERE `template_name` = '周末满80减15');
+
+-- ------------------------------------------------------------
+-- E2E 历史数据：乘客 13900139000 的 4 笔已支付订单 + 1 张已领券
+-- 「我的页最近订单 >3 张卡」「领券中心已领券置灰」两条用例依赖，
+-- 之前这些数据只存在于本地开发库，全新环境必挂。
+-- ------------------------------------------------------------
+SET @driver_id := (SELECT id FROM `user` WHERE phone = '13800138000' LIMIT 1);
+SET @passenger_id := (SELECT id FROM `user` WHERE phone = '13900139000' LIMIT 1);
+
+-- 一笔"已结束"的历史行程（订单展示用，时间在过去）
+-- 这些表的 id 由应用/雪花生成（无 AUTO_INCREMENT），种子必须显式给 id
+INSERT INTO `trip` (`id`, `driver_id`, `from_city`, `to_city`, `departure_time`, `total_seats`, `remain_seats`,
+                    `price`, `status`, `remark`)
+SELECT 9900001, @driver_id, '石家庄', '邯郸', DATE_SUB(NOW(), INTERVAL 3 DAY), 4, 0, 40.00, 3, 'E2E 历史订单行程'
+FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `trip` WHERE `id` = 9900001);
+
+SET @hist_trip := 9900001;
+
+-- 4 笔已支付订单（passenger_id=2 → 偶数 → 分片表 trip_order_0）
+INSERT INTO `trip_order_0` (`id`, `order_no`, `trip_id`, `passenger_id`, `seat_count`, `total_price`,
+                            `coupon_discount`, `pay_price`, `status`, `payment_no`)
+SELECT 9900101, '20261001000000000001', @hist_trip, @passenger_id, 1, 40.00, 0.00, 40.00, 'PAID', 'P20261001000000000001'
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `trip_order_0` WHERE `order_no` = '20261001000000000001');
+
+INSERT INTO `trip_order_0` (`id`, `order_no`, `trip_id`, `passenger_id`, `seat_count`, `total_price`,
+                            `coupon_discount`, `pay_price`, `status`, `payment_no`)
+SELECT 9900102, '20261002000000000002', @hist_trip, @passenger_id, 1, 40.00, 0.00, 40.00, 'PAID', 'P20261002000000000002'
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `trip_order_0` WHERE `order_no` = '20261002000000000002');
+
+INSERT INTO `trip_order_0` (`id`, `order_no`, `trip_id`, `passenger_id`, `seat_count`, `total_price`,
+                            `coupon_discount`, `pay_price`, `status`, `payment_no`)
+SELECT 9900103, '20261003000000000003', @hist_trip, @passenger_id, 1, 40.00, 0.00, 40.00, 'PAID', 'P20261003000000000003'
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `trip_order_0` WHERE `order_no` = '20261003000000000003');
+
+INSERT INTO `trip_order_0` (`id`, `order_no`, `trip_id`, `passenger_id`, `seat_count`, `total_price`,
+                            `coupon_discount`, `pay_price`, `status`, `payment_no`)
+SELECT 9900104, '20261004000000000004', @hist_trip, @passenger_id, 1, 40.00, 0.00, 40.00, 'PAID', 'P20261004000000000004'
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `trip_order_0` WHERE `order_no` = '20261004000000000004');
+
+-- 1 张已领取的券（「已领取，每人限领一张」置灰用）
+SET @tpl := (SELECT id FROM `coupon_template` WHERE `template_name` = '新客满50减10' LIMIT 1);
+
+INSERT INTO `user_coupon` (`id`, `coupon_no`, `coupon_template_id`, `user_id`, `type`, `threshold`,
+                           `discount_value`, `status`, `expire_at`)
+SELECT 9900201, 'C20261001000000000001', @tpl, @passenger_id, 'FULL_REDUCTION', 50.00, 10.00, 0,
+       DATE_ADD(NOW(), INTERVAL 30 DAY)
+FROM DUAL WHERE NOT EXISTS (SELECT 1 FROM `user_coupon` WHERE `coupon_no` = 'C20261001000000000001');
