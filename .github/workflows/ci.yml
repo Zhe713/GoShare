@@ -109,8 +109,12 @@ jobs:
           done
           echo "vite ready"
         working-directory: web
+      - name: 安装前端依赖
+        run: npm ci
+        working-directory: web
+
       - name: 安装 Playwright 浏览器
-        run: npx playwright install chromium
+        run: npx playwright install --with-deps chromium
         working-directory: web
       - name: 运行 E2E 主链路
         run: npx playwright test
