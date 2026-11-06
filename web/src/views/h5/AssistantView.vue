@@ -5,6 +5,7 @@ import { useRouter } from 'vue-router'
 import { GNavBar, GChatBubble, GInput, GButton, GToast } from '@/g-ui'
 import { assistantChat, orderDraft, type OrderDraft } from '@/api/user'
 import { createOrder } from '@/api/order'
+import { formatTripTime } from '@/utils/format'
 
 const router = useRouter()
 
@@ -125,10 +126,10 @@ async function confirmOrder(draft: OrderDraft) {
             <span class="assistant__draft-price num">约 {{ m.draft.estimatedTotal }} 元</span>
           </div>
           <div class="assistant__draft-row assistant__draft-row--sub">
-            <span>{{ m.draft.departureTime }}</span>
+            <span>{{ formatTripTime(m.draft.departureTime) }}</span>
             <span>余 {{ m.draft.remainSeats }} 座 · {{ m.draft.seatCount }} 人</span>
           </div>
-          <div v-if="m.draft.stopCities?.length" class="assistant__draft-stops">
+          <div v-if="m.draft.stopCities && m.draft.stopCities.length > 2" class="assistant__draft-stops">
             途经：{{ m.draft.stopCities.join(' → ') }}
           </div>
           <p class="assistant__draft-policy">{{ m.draft.cancelPolicy }}</p>

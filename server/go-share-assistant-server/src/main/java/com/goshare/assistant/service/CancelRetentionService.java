@@ -148,9 +148,16 @@ public class CancelRetentionService {
             if (searchResp == null || searchResp.getData() == null) {
                 return List.of();
             }
-            return searchResp.getData().stream()
+            // 同路线搜索（未来行程）：按出发时间去重（种子数据里有同班次多条记录），
+            // 再取最早 3 条 —— 挽留/改签列表出现"同一时间三条"会让用户困惑
+            java.util.Map<String, TripSimpleVO> byTime = new java.util.LinkedHashMap<>();
+            searchResp.getData().stream()
                     .filter(t -> !t.getId().equals(tripId))
                     .filter(t -> t.getDepartureTime() != null && t.getDepartureTime().isAfter(LocalDateTime.now()))
+                    .filter(t -> t.getRemainSeats() != null && t.getRemainSeats() > 0)
+                    .sorted(java.util.Comparator.comparing(TripSimpleVO::getDepartureTime))
+                    .forEach(t -> byTime.putIfAbsent(t.getDepartureTime().format(FMT), t));
+            return byTime.values().stream()
                     .limit(3)
                     .map(t -> {
                         CancelRetentionVO.Alternative alt = new CancelRetentionVO.Alternative();

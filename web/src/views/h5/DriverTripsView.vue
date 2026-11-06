@@ -4,6 +4,7 @@ import { onMounted, ref } from 'vue'
 import { useRouter } from 'vue-router'
 import { GNavBar, GCard, GButton, GToast, GEmpty } from '@/g-ui'
 import { myTrips, cancelTrip, departTrip, completeTrip, type Trip } from '@/api/trip'
+import { formatTripTime } from '@/utils/format'
 import { ordersByTrip, boardPassenger, completePassenger, type Order } from '@/api/order'
 
 const router = useRouter()
@@ -130,7 +131,7 @@ async function onArrive(tripId: number, orderNo: string) {
         <span class="driver__status" :class="`driver__status--${t.status}`">{{ statusText(t.status) }}</span>
       </div>
       <div class="driver__meta">
-        <span>{{ t.departureTime }}</span>
+        <span>{{ formatTripTime(t.departureTime) }}</span>
         <span>余 {{ t.remainSeats }}/{{ t.totalSeats }} 座</span>
       </div>
       <div v-if="t.vehiclePlate" class="driver__vehicle">车辆：{{ t.vehiclePlate }}{{ t.vehicleModel ? ' · ' + t.vehicleModel : '' }}</div>

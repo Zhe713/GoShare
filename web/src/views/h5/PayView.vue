@@ -4,7 +4,7 @@ import { onMounted, onUnmounted, ref } from 'vue'
 import { useRoute, useRouter } from 'vue-router'
 import { GNavBar, GCard, GButton, GSkeleton, GError } from '@/g-ui'
 import { getOrder, payOrder, type Order } from '@/api/order'
-import { countdownText, yuan } from '@/utils/format'
+import { countdownText, yuan, formatTripTime } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -86,7 +86,7 @@ function goHome() {
         <p class="pay__label">待支付金额</p>
         <p class="pay__amount num"><b>{{ yuan(order.payPrice) }}</b> 元</p>
         <template v-if="order.tripFromCity && order.tripToCity">
-          <p class="pay__route">{{ order.tripFromCity }} → {{ order.tripToCity }}<span v-if="order.tripDepartureTime" class="pay__route-time num">发车 {{ order.tripDepartureTime }}</span></p>
+          <p class="pay__route">{{ order.tripFromCity }} → {{ order.tripToCity }}<span v-if="order.tripDepartureTime" class="pay__route-time num">发车 {{ formatTripTime(order.tripDepartureTime) }}</span></p>
         </template>
         <p v-if="!expired" class="pay__countdown num">{{ countdownText(leftMs) }}，请尽快完成支付</p>
         <p v-else class="pay__countdown pay__countdown--expired num">已超时，订单已关闭</p>

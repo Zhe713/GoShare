@@ -11,7 +11,7 @@ import { resolve, dirname } from 'node:path'
 import { fileURLToPath } from 'node:url'
 
 const __dirname = dirname(fileURLToPath(import.meta.url))
-const OUT = resolve(__dirname, '../docs/images')
+const OUT = resolve(__dirname, '../../docs/images')
 const WEB = 'http://localhost:5173'
 const API = 'http://localhost:8000'
 
@@ -47,9 +47,33 @@ const main = async () => {
   const dToken = await login(D)
   if (!pToken) throw new Error('乘客登录失败，检查服务是否就绪')
 
-  // 取一条石家庄→邯郸的真实行程用于详情页
-  const search = await api('/api/trip/search?fromCity=石家庄&toCity=邯郸', { token: pToken })
-  const tripId = search.data?.[0]?.id ?? 1
+  // 自建一条演示行程（6 座 / 3 站 / 2 区间），避免依赖种子数据、也避免截图自消耗把展示行程买空
+  const date = new Date(Date.now() + 2 * 86400_000)
+  const ymd = `${date.getFullYear()}-${String(date.getMonth() + 1).padStart(2, '0')}-${String(date.getDate()).padStart(2, '0')}`
+  const published = await api('/api/trip/publish', {
+    method: 'POST',
+    token: dToken,
+    body: {
+      fromCity: '石家庄',
+      toCity: '邯郸',
+      departureTime: `${ymd}T08:00:00`,
+      totalSeats: 6,
+      price: 40,
+      pricePerKm: 0.32,
+      stops: [
+        { city: '石家庄', address: '石家庄站西广场', offsetMinutes: 0 },
+        { city: '邢台', address: '邢台东站', offsetMinutes: 55 },
+        { city: '邯郸', address: '邯郸东站', offsetMinutes: 105 },
+      ],
+      vehiclePlate: '冀A·8866Z',
+      vehicleModel: '比亚迪汉 EV',
+      vehicleColor: '曜石黑',
+      remark: '演示行程',
+    },
+  })
+  const tripId = published.data?.id
+  if (!tripId) throw new Error('演示行程发布失败：' + JSON.stringify(published).slice(0, 200))
+  console.log(`演示行程已创建 tripId=${tripId}（6 座 / 3 站）`)
 
   const browser = await chromium.launch()
   const h5 = await browser.newContext({
@@ -69,7 +93,7 @@ const main = async () => {
   await shoot(page, '/assistant', 'ai-order-card', {
     before: async (p) => {
       const input = p.getByPlaceholder(/问问助手|订/)
-      await input.fill('从石家庄订明天去邯郸的')
+      await input.fill('从石家庄订后天去邯郸的，两个人')
       await p.getByRole('button', { name: '发送' }).click()
       await p.getByText('确认下单', { exact: false }).first().waitFor({ timeout: 20000 }).catch(() => {})
       await p.waitForTimeout(800)
@@ -91,7 +115,16 @@ const main = async () => {
         before: async (p) => {
           await p.getByRole('button', { name: /取消订单/ }).click()
           await p.getByText('取消前先看一下').waitFor({ timeout: 15000 }).catch(() => {})
-          await p.waitForTimeout(1000)
+          await p.waitForTimeout(800)
+          // 抽屉内容可滚动：滚到底部，让「改签至此班」按钮进入视口
+          await p.evaluate(() => {
+            const scrollables = Array.from(document.querySelectorAll('div')).filter(
+              (el) => el.scrollHeight > el.clientHeight + 30 && el.textContent?.includes('费用说明'),
+            )
+            const sheet = scrollables.pop()
+            if (sheet) sheet.scrollTop = sheet.scrollHeight
+          })
+          await p.waitForTimeout(600)
         },
       })
     }

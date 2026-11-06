@@ -6,7 +6,7 @@ import { GNavBar, GTabBar, GCard, GInput, GButton, GToast } from '@/g-ui'
 import { currentUser, login, register, tripBill, type UserInfo, type TripBill } from '@/api/user'
 import { getToken, setToken } from '@/api/request'
 import { myOrders, type Order } from '@/api/order'
-import { yuan } from '@/utils/format'
+import { yuan, formatTripTime } from '@/utils/format'
 
 const router = useRouter()
 const tab = ref('mine')
@@ -184,7 +184,7 @@ function doLogout() {
             <span class="mine__order-price num">{{ yuan(o.payPrice) }} 元</span>
           </p>
           <p class="mine__order-sub">
-            <template v-if="o.tripDepartureTime">发车 {{ o.tripDepartureTime }}</template>
+            <template v-if="o.tripDepartureTime">发车 {{ formatTripTime(o.tripDepartureTime) }}</template>
             <template v-else>下单 {{ o.createdAt }}</template>
             <span class="mine__order-seats num">{{ o.seatCount }} 座</span>
           </p>

@@ -87,7 +87,14 @@ public class OrderDraftService {
         // 4. 组装确认卡（金额确定性计算；余座不足时明确提示）
         long tripId = picked.path("id").asLong();
         int remainSeats = picked.path("remainSeats").asInt(0);
+        // 单价口径与下单一致：有「每公里单价 + 全程里程」时按区间计价算（全程价），
+        // 否则退回行程标价，避免"预估 40 实付 64"的口径不一致。
         BigDecimal unitPrice = picked.path("price").decimalValue();
+        BigDecimal perKm = picked.path("pricePerKm").decimalValue();
+        BigDecimal totalKm = picked.path("totalDistanceKm").decimalValue();
+        if (perKm != null && perKm.signum() > 0 && totalKm != null && totalKm.signum() > 0) {
+            unitPrice = perKm.multiply(totalKm).setScale(2, RoundingMode.HALF_UP);
+        }
         vo.setTripId(tripId);
         vo.setFromCity(picked.path("fromCity").asText(q.getFromCity()));
         vo.setToCity(picked.path("toCity").asText(q.getToCity()));

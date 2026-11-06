@@ -6,7 +6,7 @@ import { GNavBar, GCard, GButton, GSkeleton, GError } from '@/g-ui'
 import { getTrip, type Trip } from '@/api/trip'
 import { createOrder } from '@/api/order'
 import { myCoupons, type Coupon } from '@/api/user'
-import { yuan } from '@/utils/format'
+import { yuan, formatTripTime } from '@/utils/format'
 
 const route = useRoute()
 const router = useRouter()
@@ -109,7 +109,7 @@ async function confirmOrder() {
           </div>
         </div>
         <div class="detail__meta">
-          <span class="num">{{ trip.departureTime }}</span>
+          <span class="num">{{ formatTripTime(trip.departureTime) }}</span>
           <span class="num">余 {{ trip.remainSeats }}/{{ trip.totalSeats }} 座</span>
           <span class="detail__price num"><b>{{ trip.price }}</b> 元/座</span>
         </div>

@@ -44,3 +44,7 @@ reports/load-segment-*/
 # 个人求职材料（简历对照 / 面试准备，不入公开仓库）
 docs/GoShare-简历技术对照.md
 docs/GoShare-面试防穿透弹药.md
+
+# 截图脚本临时文件
+.shot_order.txt
+web/scripts/_shoot-order.mjs
