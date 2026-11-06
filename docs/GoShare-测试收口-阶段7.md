@@ -1,7 +1,10 @@
 # GoShare 阶段 7 测试收口 · 覆盖率门禁 / E2E / CI 串联 / 省 token 实测
 
+> **时效说明（2026-11-06）**：本文是阶段 7 的交付快照。此后又完成了「阶段 0 止血」（内部命令接口 / 支付回调验签 / 状态 CAS / 越权修复）、退款与改签闭环、履约生命周期、AI 六功能与本地加密密钥管理。
+> 测试规模已从 127 用例 / 2 条 E2E 增长到 **295 用例 / 16 条 E2E**，7 个模块行覆盖 ≥ 70%。当前数据以 [README](../README.md) 为准，本文保留作为阶段记录。
+
 > 执行依据：阶段 7 任务清单（后端 Jacoco 行覆盖 ≥70% 门禁 → Playwright E2E 主链路 → CI 门禁串联 → 省 token 比例实测回填简历）
-> 工程：后端 `server\`（11 模块）、前端 `web\`、CI `scripts\ci.ps1` + `.github\workflows\ci.yml`
+> 工程：后端 `server\`（10 模块）、前端 `web\`、CI `scripts\ci.ps1` + `.github\workflows\ci.yml`
 > 验证方式：`mvn clean verify`（Jacoco check-module 逐模块拦截）→ `npx playwright test` → `scripts\ci.ps1` 四步门禁 → `GET /api/assistant/llm-stats` 实测
 
 ## 一、交付范围

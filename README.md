@@ -78,7 +78,7 @@
 
 ### 工程质量
 
-- 后端 **130+ 单测**，7 个模块 JaCoCo 行覆盖 ≥ 70%（模块级 check 独立拦截）
+- 后端 **295 单测**，7 个模块 JaCoCo 行覆盖 ≥ 70%（模块级 check 独立拦截）
 - **Playwright E2E 16/16**：真实浏览器跑主链路（登录 → 搜索 → 下单 → 支付 → 订单详情 → AI 对话）
 - 并发压测：50 并发抢 3 座**恰好 3 单成功、零超卖**，区间独立性实测（A 满座 B 照卖）
 - 全链路 **traceId**（Filter + RestTemplate 透传 + 日志 MDC）
@@ -159,16 +159,19 @@ flowchart TB
 
 ### 环境要求
 
-JDK 17 · Maven 3.9+ · Node.js 18+ · Docker Desktop（或 Docker + Compose）
+JDK 17 · Maven 3.9+ · **Node.js 22**（CI 用 22；18/20 上 vitest 的 jsdom 环境可能启动失败）· Docker Desktop（或 Docker + Compose）
 
 ### 1. 启动中间件
 
 ```bash
 cd docker
-docker compose up -d          # MySQL / Redis / RocketMQ / ES / Nacos
+docker compose up -d --wait    # MySQL / Redis / RocketMQ / ES / Nacos（--wait 等健康检查通过）
 ```
 
-首次启动会自动执行 `sql/` 下的建表与种子脚本。
+首次启动会自动执行 `sql/` 下的建表与种子脚本（含 4 个演示账号、券模板与 4 笔历史订单）。
+
+> **已有旧数据卷**（之前 clone 过、`mysql-data` 卷已存在）时，初始化脚本不会重跑，
+> 需要手动补种子：`docker exec -i goshare-mysql mysql -uroot -proot123 goshare < sql/07-demo-seed.sql`
 
 ### 2. 启动后端
 
@@ -203,10 +206,12 @@ npm run dev              # 同端口三入口
 
 ### 4. 演示账号
 
-| 角色 | 手机号 | 密码 |
-|---|---|---|
-| 车主 | 13900139000 | 123456 |
-| 乘客 | 13700137000 | 123456 |
+| 角色 | 手机号 | 密码 | 说明 |
+|---|---|---|---|
+| 车主 | 13800138000 | 123456 | 已实名 + 车主认证（E2E 用它发车） |
+| 车主 | 13900139000 | 123456 | 车主认证（E2E 默认登录账号） |
+| 乘客 | 13700137000 | 123456 | 普通乘客（演示） |
+| 乘客 | 13600136000 | 123456 | 普通乘客（演示） |
 
 ### 5. AI 助手配置（可选）
 
@@ -396,7 +401,7 @@ GoShare/
 
 | 阶段 | 内容 |
 |---|---|
-| 0 | 环境骨架：11 模块 Maven 工程 + 6 个中间件容器 |
+| 0 | 环境骨架：10 模块 Maven 工程（8 服务 + common + api）+ 6 个中间件容器 |
 | 1 | 核心链路：注册登录 → 发布 → 搜索 → 下单 → 支付 |
 | 2 | 券体系：模板 / 领券 / 秒杀 / 锁定用券 / 结算 / 退券 |
 | 3 | 治理与搜索：Nacos / Gateway 限流 / ES 降级 / 候补 / 分库分表 |

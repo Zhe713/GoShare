@@ -1,7 +1,7 @@
 ﻿@echo off
 chcp 65001 >nul
 title GoShare 一键启动
-cd /d D:\GoShare
+cd /d "%~dp0"
 echo ========================================
 echo   GoShare 顺风拼车 - 一键启动
 echo ========================================

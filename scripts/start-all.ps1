@@ -9,8 +9,10 @@ param(
 $ErrorActionPreference = 'Stop'
 . (Join-Path $PSScriptRoot '_env.ps1')
 
-Write-Host '[0/4] 清理旧进程...'
-Get-Process java -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
+Write-Host '[0/4] 清理本项目的旧进程（只杀 go-share-*-server，不碰其它 Java 程序）...'
+Get-CimInstance Win32_Process -Filter "Name = 'java.exe'" -ErrorAction SilentlyContinue |
+    Where-Object { $_.CommandLine -match 'go-share-[a-z]+-server' } |
+    ForEach-Object { Stop-Process -Id $_.ProcessId -Force -ErrorAction SilentlyContinue }
 if (-not $SkipFrontend) {
     Get-Process node -ErrorAction SilentlyContinue | Stop-Process -Force -ErrorAction SilentlyContinue
 }
@@ -24,12 +26,22 @@ if ($SkipDocker) {
     if (-not (Test-Path -LiteralPath $composeFile)) { throw "未找到 $composeFile" }
     Push-Location (Join-Path $repoRoot 'docker')
     try {
-        docker compose up -d
+        docker compose up -d --wait
         if ($LASTEXITCODE -ne 0) { throw 'docker compose up 失败（Docker Desktop 是否已启动？）' }
     } finally {
         Pop-Location
     }
-    Start-Sleep 10
+    # --wait 只保证容器健康，建表/种子脚本可能还在跑；等到演示账号可查再起服务，
+    # 否则第一批请求会因为表不存在直接 500
+    $ready = $false
+    for ($i = 0; $i -lt 60; $i++) {
+        $out = & docker exec goshare-mysql mysql -uroot -proot123 -N -e "SELECT COUNT(*) FROM goshare.user WHERE phone='13900139000'" 2>$null
+        if ("$out".Trim() -eq '1') { $ready = $true; break }
+        Start-Sleep 2
+    }
+    if (-not $ready) {
+        Write-Warning 'MySQL 建表/种子未就绪。若数据卷是旧的，执行：docker exec -i goshare-mysql mysql -uroot -proot123 goshare < sql/07-demo-seed.sql'
+    }
 }
 
 if ($SkipBackend) {

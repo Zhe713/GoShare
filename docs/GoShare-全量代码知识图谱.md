@@ -1,7 +1,8 @@
 # GoShare 全量代码知识图谱
 
 > 用途：把整个仓库"读成一张图"——规模盘点、端到端调用链、文件级职责地图、关键不变量、配置矩阵、测试矩阵、一致性审计（含缺陷清单）、证据索引。
-> 口径：以仓库当前代码为准（152 个 main Java 类 / 8376 行，29 个测试类 / 3416 行，前端 src 45 个文件 / 4412 行）。
+> 口径：以仓库当前代码为准（2026-11-06 复核：190 个 main Java 类 / 12283 行，40 个测试类，前端 src 49 个文件 / 6034 行）。
+> 说明：下文的类数/行数是阶段 3 审计时的快照，期间新增了区间库存、退款改签、履约、AI 六功能与本地密钥管理等代码，规模已按上面这行更新。
 > 与既有文档的分工：`方案-v2.0.md` 讲"要做什么"，`技术亮点整理.md` 讲"亮点是什么"，本文只讲"代码实际长什么样、哪里对得上、哪里对不上"。
 
 ---
@@ -11,7 +12,7 @@
 | 维度 | 数量 | 说明 |
 |---|---|---|
 | Maven 模块 | 11 | `common` + `api`（纯聚合 POM，无源码）+ `gateway` + 8 个业务服务 |
-| Java 主源码 | 152 个 / 8376 行 | 不含测试 |
+| Java 主源码 | 190 个 / 12283 行 | 不含测试（2026-11-06 复核） |
 | Java 测试 | 29 个 / 3416 行 | 约 127 个用例 |
 | SQL 脚本 | 4 个 | 核心 6 表 / 券 3 表 / 分片 2 表 / AI 3 表 |
 | 前端源码 | 45 个 / 4412 行 | 3 入口 + 8 个 H5 页面 + 14 个 g-ui 组件 |
@@ -295,7 +296,7 @@ B1 工单：`/api/assistant/work-order/analyze` → 关键词分类（退款/改
 | assistant | `CancelRetentionServiceTest`、`WorkOrderServiceTest`、`LlmStatsServiceTest`、`NlTripParserTest`、`MatchRerankerTest` | 挽留费用回显+替代方案过滤+幂等+全挂兜底；工单分类/摘要/幂等/截断；统计口径；NL 解析；重排打分 |
 | assistant | `BeanConfigTest` | 反射校验两个 RestTemplate 的 3s/15s 超时 |
 
-覆盖率门禁：`server/pom.xml` 的 `check-module` 在 `verify` 阶段逐模块校验 LINE ≥ 0.70，排除 `**/*Application.class`、`config/`、`dto/`、`vo/`；根聚合再校验一次。6 个业务模块均达标（合计 72.2% / 977 行），notify 不在门禁范围（该模块零测试）。
+覆盖率门禁：`server/pom.xml` 的 `check-module` 在 `verify` 阶段逐模块校验 LINE ≥ 0.70，排除 `**/*Application.class`、`config/`、`dto/`、`vo/`；根聚合再校验一次。当前 7 个模块均达标：user 92.2% / trip 85.6% / payment 82.6% / order 72.8% / marketing 72.7% / assistant 71.0% / notify 70.2%（notify 为此后补的 22 个用例，2026-11-06 复核）。
 
 ---
 
