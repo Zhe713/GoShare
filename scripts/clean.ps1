@@ -7,7 +7,13 @@ param(
 )
 
 $ErrorActionPreference = 'Stop'
-$root = Split-Path -Parent $PSScriptRoot
+# 仓库根按脚本位置推导，可用 GOSHARE_HOME 覆盖（不写死盘符）
+if ($env:GOSHARE_HOME) {
+    $root = $env:GOSHARE_HOME
+} else {
+    $root = Split-Path -Parent $PSScriptRoot
+}
+if (-not (Test-Path -LiteralPath $root)) { throw "仓库根目录不存在：$root" }
 
 Write-Host "==> 清理 GoShare 临时产物（$root）"
 

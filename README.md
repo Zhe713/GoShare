@@ -1,184 +1,376 @@
-# GoShare 顺风拼车平台
+# GoShare · 顺风拼车平台
 
-个人求职项目（不上线）：以 12306（座位库存 / 并发下单 / 订单支付）和牛券（券引擎 / 结算 / 压测）为蓝本爆改的顺风拼车平台，含 AI 出行助手。
+<p align="center">
+  <b>不是"又一个 12306 仿写"，而是一个把「区间库存 / 交易一致性 / AI 防幻觉」三件事讲清楚的顺风拼车系统</b>
+</p>
 
-- 后端：Java 17 + Spring Boot 3.2 + Spring Cloud Alibaba（微服务）
-- 前端：Vue3 H5（玻璃拟态）+ 管理后台 + 数据大屏
-- 测试：单测 / 集成 / 接口 / 并发 / E2E / 压测 / 覆盖率门禁 / CI
+<p align="center">
+  <img alt="Java" src="https://img.shields.io/badge/Java-17-orange?logo=openjdk">
+  <img alt="Spring Boot" src="https://img.shields.io/badge/Spring%20Boot-3.2-brightgreen?logo=springboot">
+  <img alt="Spring Cloud Alibaba" src="https://img.shields.io/badge/Spring%20Cloud%20Alibaba-Nacos%20%2B%20Gateway-1677ff">
+  <img alt="Vue" src="https://img.shields.io/badge/Vue-3%20%2B%20TS%20strict-42b883?logo=vuedotjs">
+  <img alt="Unit Tests" src="https://img.shields.io/badge/unit%20tests-130%2B%20passing-success">
+  <img alt="E2E" src="https://img.shields.io/badge/E2E-16%2F16%20passing-success">
+  <img alt="License" src="https://img.shields.io/badge/license-MIT-blue">
+</p>
+
+<p align="center">
+  <a href="#-这是什么">这是什么</a> ·
+  <a href="#-项目亮点">项目亮点</a> ·
+  <a href="#-系统架构">系统架构</a> ·
+  <a href="#-快速开始">快速开始</a> ·
+  <a href="#-关键设计">关键设计</a> ·
+  <a href="#-测试与质量">测试与质量</a>
+</p>
+
+---
+
+## 这是什么
+
+一个**求职作品级**的微服务顺风拼车平台：乘客搜索行程、车主发布拼座、按区间售座、下单支付、退款改签、履约评价，并内置一个**只讲真话**的 AI 出行助手。
+
+与常见"电商 / 秒杀 / 12306 仿写"最大的区别在业务建模深度：
+
+| 常见做法 | 本项目做法 |
+|---|---|
+| 行程只有「起点→终点」一个标量余座 | 行程有**站点序列**，`trip_segment` 按区间记账——**北京→济南满座不影响济南→上海继续卖** |
+| 取消即报错 / 付了钱退不了 | 完整**退款域**：退款单 + 渠道流水 + 部分退款（改签差额）+ 状态机 |
+| 下单成功即终态 | 订单 / 行程**双状态机** + 履约闭环（上车 → 到达 → 评价） |
+| AI 助手当"聊天装饰" | 六个落到业务的 AI 功能 + **结构性防幻觉**（工具化取数 + 输出护栏 + 离线历法） |
+| 并发靠"加个 Redis 锁" | Lua 原子扣减 + DB 条件更新兜底 + 幂等唯一索引，三层防超卖 |
+
+> 个人学习 / 求职作品，**不面向生产**。依赖均为本地容器或免费公开 API，无任何私有服务。
+
+---
+
+## 项目亮点
+
+### 业务建模：把"顺风车"真正建出来
+
+- **区间库存**：行程拆成 `trip_stop` 站点序列 + `trip_segment` 区间余座。乘客可选任意上下车点，订单按**覆盖区间的交集**扣座，并做区间计价（每公里单价 × 区间里程）
+- **双状态机**：行程 `待出发 → 满座 → 进行中 → 已完成 / 已取消`；订单 `CREATED → PAID → BOARDED → COMPLETED → REVIEWED`（另含 `REFUNDING / REFUNDED / CANCELLED / EXPIRED`）
+- **退款闭环**：已支付订单可取消，按发车时间计算违约金，落退款单 + 渠道流水，库存原路回补
+- **改签**：已支付订单免费改签到同线路新班次，差额自动部分退款
+- **履约闭环**：车主确认上车 / 到达、乘客评价，乘客名单按行程聚合
+
+### 交易一致性：钱和座不能对不上
+
+- **三层防超卖**：Redis Lua 原子扣减（并发闸门）→ DB 条件更新（`remain_seats >= n` 且影响行数校验）→ 幂等键唯一索引（重复提交只建一单）
+- **区间级 Lua 多 key 脚本**：一次校验订单覆盖的**所有**区间 key，任一不足整体失败，杜绝"扣了前段后段不足"的半扣状态
+- **CAS 状态迁移**：`WHERE status = '期望状态'`，影响行数 0 即冲突，避免取消 / 支付回调 / 超时关单三方互踩
+- **最终一致性**：RocketMQ 延时消息关单 + 定时扫描兜底 + 事件驱动通知，未引入 Seata
+
+### AI 助手：结构性去幻觉，不是提示词工程
+
+六个落到业务的功能（不只会聊天）：
+
+| 功能 | 说明 | 数据来源 |
+|---|---|---|
+| **F1 对话式下单** | 说"从石家庄订明天去邯郸的，两个人"→ 生成确认卡（班次 / 余座 / 预估金额 / 取消政策），点确认才真正下单 | 规则解析 + 真实班次 + 确定性算价 |
+| **F2 出发参谋** | "我几点出门？"→ 发车时间 − 通勤 − 提前到站 − 恶劣天气缓冲，给出具体出门时刻 | 订单 + 行程 + Open-Meteo 实时天气 |
+| **F3 价格参谋** | "这个价贵吗？"→ 同线路近 30 天成交均价 / 最低价 / 中位数 | 真实订单聚合 |
+| **F4 改签建议** | 取消挽留时给出同线路可改签班次，一键换班 | 真实班次 + 差额结算 |
+| **F5 行程账单** | 月度拼车次数 / 里程 / 花费 / 较快车估算省钱 | 真实订单聚合 |
+| **F6 节假日出行** | "距春节还有 N 天，节前一周是出行高峰" | lunar-java 离线历法（0 token） |
+
+防幻觉三件套：**Function Calling 工具化取数**（8 个工具，数据只能来自系统）→ **输出护栏**（未调工具却输出硬断言则重试 / 降级）→ **离线确定性算法**（历法 / 价格 / 余座全部代码算）。省 token 四关卡：答案缓存 → 规则先答 → 固定前缀 → 夜间预生成，全量调用记账 `llm_call_log`。
+
+### 工程质量
+
+- 后端 **130+ 单测**，7 个模块 JaCoCo 行覆盖 ≥ 70%（模块级 check 独立拦截）
+- **Playwright E2E 16/16**：真实浏览器跑主链路（登录 → 搜索 → 下单 → 支付 → 订单详情 → AI 对话）
+- 并发压测：50 并发抢 3 座**恰好 3 单成功、零超卖**，区间独立性实测（A 满座 B 照卖）
+- 全链路 **traceId**（Filter + RestTemplate 透传 + 日志 MDC）
+- CI（GitHub Actions）：编译 → 单测 → 覆盖率门禁
+
+---
+
+## 系统架构
+
+```mermaid
+flowchart TB
+    subgraph Client["客户端"]
+        H5["Vue3 H5 乘客端 / 车主端"]
+        Admin["管理后台"]
+        Screen["运营数据大屏"]
+    end
+
+    GW["Gateway 8000<br/>路由 · JWT 鉴权 · Redis 令牌桶限流 · 内部接口 404"]
+
+    subgraph Services["微服务（Spring Boot 3.2）"]
+        User["user 8001<br/>注册登录 / 实名 / 车主认证"]
+        Trip["trip 8002<br/>发布行程 / 站点 / 区间库存 / ES 搜索"]
+        Order["order 8003<br/>下单占座 / 双状态机 / 退款 / 改签"]
+        Marketing["marketing 8004<br/>券模板 / 领券 / 秒杀 / 结算"]
+        Payment["payment 8005<br/>支付 / 回调验签 / 退款流水"]
+        Notify["notify 8006<br/>站内信 / MQ 事件 / 天气"]
+        Assistant["assistant 8007<br/>AI 六功能 / 防幻觉"]
+    end
+
+    subgraph Mid["中间件（docker-compose）"]
+        MySQL[(MySQL 8<br/>ShardingSphere 分表)]
+        Redis[(Redis 7<br/>库存闸门 / 缓存 / 限流)]
+        MQ[(RocketMQ<br/>延时关单 / 事件)]
+        ES[(Elasticsearch 8<br/>搜索，故障降级 MySQL)]
+        Nacos[(Nacos<br/>注册与配置)]
+    end
+
+    H5 & Admin & Screen --> GW
+    GW --> User & Trip & Order & Marketing & Payment & Notify & Assistant
+    Trip & Order & Marketing --> MySQL
+    Order & Trip & GW --> Redis
+    Order --> MQ
+    Trip --> ES
+    Services -.注册 / 发现.-> Nacos
+    Assistant -.工具调用.-> Trip & Order & Notify
+```
+
+**服务与端口**
+
+| 服务 | 端口 | 职责 |
+|---|---|---|
+| gateway | 8000 | 统一入口、鉴权、限流、内部接口屏蔽 |
+| user | 8001 | 注册登录、实名、车主认证 |
+| trip | 8002 | 发布行程、站点序列、区间库存、ES 搜索 |
+| order | 8003 | 下单占座、状态机、退款、改签、履约 |
+| marketing | 8004 | 券模板、领券、秒杀、用券结算 |
+| payment | 8005 | 模拟支付、回调验签、退款流水 |
+| notify | 8006 | 站内信、MQ 事件消费、天气 |
+| assistant | 8007 | AI 出行助手（六功能）、工单摘要 |
+
+---
+
+## 技术栈
+
+| 分类 | 选型 |
+|---|---|
+| 语言 / 框架 | Java 17、Spring Boot 3.2、Spring Cloud Alibaba（Nacos / Gateway / Sentinel） |
+| 持久层 | MyBatis-Plus、ShardingSphere-JDBC（订单按 `passenger_id` 路由 `trip_order_0/1`） |
+| 中间件 | MySQL 8、Redis 7、RocketMQ 4.9、Elasticsearch 8 |
+| 前端 | Vue 3 + TypeScript（strict）+ Vite 5 + Pinia + Vue Router，三入口（H5 / admin / screen） |
+| 前端工程 | 双级 Design Token、14 个 `g-ui` 组件、Vitest 单测、Playwright E2E |
+| 测试 | JUnit 5 + Mockito、JaCoCo 覆盖率门禁、Playwright、Bash 并发压测 |
+| AI | 可插拔 LLM 客户端（mock / OpenAI 兼容端点）、Function Calling、lunar-java |
+
+---
+
+## 快速开始
+
+### 环境要求
+
+JDK 17 · Maven 3.9+ · Node.js 18+ · Docker Desktop（或 Docker + Compose）
+
+### 1. 启动中间件
+
+```bash
+cd docker
+docker compose up -d          # MySQL / Redis / RocketMQ / ES / Nacos
+```
+
+首次启动会自动执行 `sql/` 下的建表与种子脚本。
+
+### 2. 启动后端
+
+```bash
+cd server
+mvn -DskipTests package
+
+# 8 个服务，端口 8000-8007（也可用 IDE 逐个启动）
+java -jar go-share-gateway-server/target/*.jar    --server.port=8000 &
+java -jar go-share-user-server/target/*.jar       --server.port=8001 &
+java -jar go-share-trip-server/target/*.jar       --server.port=8002 &
+java -jar go-share-order-server/target/*.jar      --server.port=8003 &
+java -jar go-share-marketing-server/target/*.jar  --server.port=8004 &
+java -jar go-share-payment-server/target/*.jar    --server.port=8005 &
+java -jar go-share-notify-server/target/*.jar     --server.port=8006 &
+java -jar go-share-assistant-server/target/*.jar  --server.port=8007 &
+```
+
+> **多网卡机器提示**（Hyper-V / WSL）：若网关转发超时，检查 Nacos 注册 IP，
+> 启动参数加 `--spring.cloud.nacos.discovery.ip=<可路由内网 IP>`。
+
+### 3. 启动前端
+
+```bash
+cd web
+npm install
+npm run dev              # 同端口三入口
+#   H5 乘客端 / 车主端   http://localhost:5173/
+#   管理后台             http://localhost:5173/admin.html
+#   运营数据大屏         http://localhost:5173/screen.html
+```
+
+### 4. 演示账号
+
+| 角色 | 手机号 | 密码 |
+|---|---|---|
+| 车主 | 13900139000 | 123456 |
+| 乘客 | 13700137000 | 123456 |
+
+### 5. AI 助手配置（可选）
+
+默认 `mock` 模式，**零密钥即可跑通全部功能**（规则关卡 + 工具链均为确定性实现）。接真实模型：
+
+```bash
+export GOSHARE_LLM_MODE=http
+export GOSHARE_LLM_API_KEY=你的key      # 阿里云百炼或任意 OpenAI 兼容端点
+export GOSHARE_LLM_HTTP_URL=https://dashscope.aliyuncs.com/compatible-mode/v1/chat/completions
+```
+
+---
+
+## 界面预览
+
+<p align="center">
+  <img src="docs/images/home.png" width="240" alt="首页搜索">
+  <img src="docs/images/trip-detail.png" width="240" alt="行程详情">
+  <img src="docs/images/ai-order-card.png" width="240" alt="AI 对话式下单">
+</p>
+<p align="center"><sub>首页搜索 · 行程详情（车主与车辆信任信息）· AI 对话式下单确认卡</sub></p>
+
+<p align="center">
+  <img src="docs/images/order-reschedule.png" width="240" alt="取消挽留与改签">
+  <img src="docs/images/mine-bill.png" width="240" alt="行程账单">
+  <img src="docs/images/driver-trips.png" width="240" alt="车主乘客管理">
+</p>
+<p align="center"><sub>取消挽留与一键改签 · 月度行程账单 · 车主乘客管理</sub></p>
+
+<p align="center">
+  <img src="docs/images/screen.png" width="760" alt="运营数据大屏">
+</p>
+<p align="center"><sub>运营数据大屏（真实聚合数据）</sub></p>
+
+---
+
+## 关键设计
+
+### 1. 区间库存：一次建模解决三个下游问题
+
+传统做法只存 `remain_seats` 一个标量。本项目行程有站点序列：
+
+```
+trip_stop:    [0]北京 → [1]济南 → [2]上海
+trip_segment: [0,1]=2 座   [1,2]=2 座     ← 每个区间独立记账
+```
+
+买"北京→济南"只扣 `[0,1]`；买全程则同时扣 `[0,1]` 与 `[1,2]`。
+
+**收益**：区间可售性正确（不再出现"中途区间有座却显示无座"）、区间计价可追溯（0.35 元/km × 547.7km = 191.70 元），并为顺路匹配 / 分段定价留出数据基础。
+
+**并发闸门也是区间级**：Redis key 为 `trip:seg:{tripId}:{from}-{to}`，Lua 先检查订单覆盖的**全部**区间 key 再统一扣减。
+
+### 2. 三层防超卖 + CAS 状态机
+
+```
+请求 → [1] Redis Lua 原子扣减（区间多 key，先检查后扣）
+     → [2] DB 条件更新 remain_seats >= n（影响行数必须等于覆盖区间数）
+     → [3] 幂等键唯一索引（同一 key 只建一单）
+```
+
+任一层失败都会回补 Redis 并回滚 DB（同事务）。取消 / 支付回调 / 超时关单全部走 `WHERE status='期望值'` 的 CAS，影响行数 0 即冲突。
+
+**实测**：50 并发抢 3 座 → 恰好 3 单成功；区间 A 满座后区间 B 仍可独立售出 3 座。
+
+### 3. 退款域：付了钱一定能退
+
+- 取消已支付订单 → 计算违约金（发车 2h 外免费 / 2h 内 20% 封顶 50 元）→ 落 `refund_order` + `refund_transaction` → 库存回补 → MQ 事件通知
+- 改签差额走**部分退款**：`payment` 保持 SUCCESS 不整单 REFUNDED，符合真实渠道语义
+
+### 4. AI 结构性防幻觉
+
+```
+用户问题 → 关卡1 答案缓存（data-version 失效）
+        → 关卡2 规则先答（历法 / 时间 / 费用，0 token 0 幻觉）
+        → 关卡3 固定前缀 + 多轮上下文
+        → 关卡4 模型 + Function Calling 工具取数
+        → 输出护栏：未调工具却输出硬断言 → 重试 → 降级
+        → llm_call_log 全量记账（token / 缓存命中 / 耗时）
+```
+
+模型没有"自己编数据"的机会：行程、余座、价格、天气、历法全部来自工具或确定性代码，模型只负责把结构化结果讲成人话。
+
+---
+
+## 测试与质量
+
+```bash
+# 后端单测 + JaCoCo 覆盖率门禁
+cd server && mvn test
+
+# 前端类型检查 + 单测 + 构建
+cd web && npx vue-tsc --noEmit && npm test && npm run build
+
+# E2E（需服务与前端 dev server 运行中）
+cd web && npm run test:e2e
+
+# 区间库存并发压测（需服务运行）
+bash scripts/load-test-segment.sh
+```
+
+| 项 | 结果 |
+|---|---|
+| 后端单测 | 130+ 用例全绿；7 模块行覆盖 ≥ 70% |
+| 前端类型检查 | `vue-tsc` 0 错误 |
+| E2E | 16/16 通过（主链路 / 订单详情 / 券包 / 导航 / AI 对话 6 个 spec） |
+| 并发压测 | 50 并发抢 3 座：3 成功零超卖；Redis 与 DB 区间余座一致 |
+| 压测报告 | [`reports/load-segment-20261105-REPORT.md`](reports/load-segment-20261105-REPORT.md) |
+
+---
 
 ## 目录结构
 
 ```
 GoShare/
-├── docs/         # 方案、规范、调研报告（定稿文档）
-├── server/       # 后端多模块工程（7 个服务 + 公共模块）
-├── web/          # 前端（h5 / admin）
-├── sql/          # 数据库脚本（docker 启动时自动执行）
-├── docker/       # docker-compose 本地环境
-├── scripts/      # 辅助脚本（如 clean.ps1 清理临时文件）
-├── reports/      # 测试 / 压测报告
-└── _work/        # 一次性临时产物（不入库，随用随清）
+├── server/                         # 后端 Maven 多模块（common / api / gateway + 8 服务）
+│   ├── go-share-common/            #   公共：Result / 异常 / JWT / 内部接口令牌 / traceId
+│   ├── go-share-gateway-server/
+│   ├── go-share-user-server/
+│   ├── go-share-trip-server/       # 站点序列 + 区间库存 + ES 搜索（故障降级）
+│   ├── go-share-order-server/      # 下单 / 双状态机 / 退款 / 改签 / 履约
+│   ├── go-share-marketing-server/  # 券模板 / 领券 / 秒杀 / 结算
+│   ├── go-share-payment-server/    # 支付 / 回调验签 / 退款流水
+│   ├── go-share-notify-server/     # 站内信 / MQ 事件 / 天气
+│   └── go-share-assistant-server/  # AI 助手 / FC 工具 / 防幻觉护栏
+├── web/                            # Vue3 前端（h5 / admin / screen 三入口 + g-ui 组件）
+├── sql/                            # 建表与种子脚本（docker 启动自动执行）
+├── docker/                         # docker-compose 本地环境
+├── scripts/                        # 启动 / 清理 / 并发压测脚本
+├── reports/                        # 压测报告
+└── docs/                           # 方案、技术亮点、面试弹药、全量代码知识图谱
 ```
 
-## 服务与端口
+---
 
-| 服务 | 端口 | 说明 |
-|---|---|---|
-| go-share-gateway-server | 8000 | 网关（统一入口） |
-| go-share-user-server | 8001 | 用户（注册登录 / 实名 / 车主认证） |
-| go-share-trip-server | 8002 | 行程（发布 / 座位库存 / 搜索） |
-| go-share-order-server | 8003 | 订单（下单占座 / 状态机 / 超时释放） |
-| go-share-marketing-server | 8004 | 券（模板 / 领券 / 用券 / 结算） |
-| go-share-payment-server | 8005 | 支付（模拟支付 / 回调 / 对账） |
-| go-share-notify-server | 8006 | 通知（站内消息 / 行程提醒 / 天气推送） |
-| go-share-assistant-server | 8007 | 出行助手（AI 语义搜索 / 取消挽留 / 工单摘要） |
+## 演进记录（阶段缩影）
 
-## 快速启动
+| 阶段 | 内容 |
+|---|---|
+| 0 | 环境骨架：11 模块 Maven 工程 + 6 个中间件容器 |
+| 1 | 核心链路：注册登录 → 发布 → 搜索 → 下单 → 支付 |
+| 2 | 券体系：模板 / 领券 / 秒杀 / 锁定用券 / 结算 / 退券 |
+| 3 | 治理与搜索：Nacos / Gateway 限流 / ES 降级 / 候补 / 分库分表 |
+| 4 | 消息与压测：RocketMQ 延时关单 + 消费防重 + 并发不超卖 |
+| 5 | AI 助手：语义搜索 / 取消挽留 / 工单摘要 / 省 token 四关卡 |
+| 6 | 前端三端：H5 / 管理后台 / 运营大屏 + 组件库 |
+| 7 | 测试收口：覆盖率门禁 / E2E / CI |
+| 8 | **深度评审后重写**：区间库存 + 双状态机 + 退款域 + 改签 + 履约闭环 + 六个 AI 功能 |
 
-环境要求：JDK 17、Maven 3.9+、Docker Desktop（Windows）。
+更多设计与评审记录见 [`docs/`](docs/)。
 
-```bash
-# 1. 启动中间件（MySQL / Redis / RocketMQ / ES / MinIO / Nacos）
-cd docker
-docker compose up -d
+---
 
-# 2. 编译后端
-cd ../server
-mvn compile
+## 已知限制（诚实说明）
 
-# 3. 逐个启动服务（或用 IDE 运行）
-mvn -pl go-share-user-server spring-boot:run
-```
+- 单机 demo：8 个服务共用一个库，order 直接写 trip 座位表（未做服务级数据隔离）
+- 未接真实支付渠道，`MOCK` 渠道即时到账（生产需异步回调 + 对账）
+- 未用分布式事务（Seata），采用消息 + 幂等 + 状态机 + 定时扫描的最终一致方案
+- 管理后台与数据大屏为演示级，非组件库级工程化
+- 未覆盖 SSRF / 灰度 / 链路采样等生产能力
 
-验证：访问 `http://localhost:8001/api/ping` 应返回 `{"code":200,...}`。
+---
 
-## 阶段进度
+## License
 
-### 阶段 0：环境与骨架 ✅
-- Maven 3.9.16 + 11 模块多模块工程（父 + common + api + gateway + 7 服务）编译通过
-- docker-compose 拉起 6 个中间件：MySQL / Redis / RocketMQ 4.9.7（含控制台）/ Elasticsearch / Nacos
-- Git 初始化（中文提交规范）、数据库 6 张核心表建表完成
+[MIT](LICENSE) © 2026 GoShare
 
-### 阶段 1：核心链路 ✅（注册→登录→发布→搜索→下单→支付→状态流转 全部联调通过）
-- 用户服务（8001）：注册即登录、JWT 鉴权、实名认证、车主认证与审核
-- 行程服务（8002）：发布行程（Redis 初始化座位库存）、按路线/日期搜索、详情、我的行程
-- 订单服务（8003）：下单防重复（幂等键表 + 唯一索引兜底）、Redis Lua 原子扣减 + DB 条件扣减双写、取消/超时自动释放并回补库存（15 分钟定时扫描）
-- 支付服务（8005）：模拟支付、回调订单服务标记已支付（回调幂等）、重复支付拦截
-- 联调验证 12 项全部通过：幂等重复下单返回首次结果、余票不足拦截、取消回补、超时释放（EXPIRED+库存回补）、重复支付拦截
-
-### 阶段 2：优惠券服务 ✅（模板→领券→秒杀→锁定用券→支付确认→取消退券 全部联调通过）
-- 营销服务（8004）：券模板管理（满减 / 折扣 / 立减三种类型）、领券（每人限领一张，唯一索引兜底）、秒杀（Redis Lua 原子扣减做闸门 + DB 条件更新 received_count 兜底防超发）、我的券列表
-- 结算引擎（纯 Java，可单测）：满减需达门槛否则不抵扣、立减无门槛、折扣按总价 × 折扣率四舍五入、抵扣不超订单总额
-- 订单服务（8003）接入用券：下单带券 → 调券服务锁定并结算（couponDiscount / payPrice 落库）→ 支付成功确认用券（券状态 0→1）→ 取消 / 超时 / 下单异常退券（状态 3→0）
-- 券变动全量流水（coupon_log：RECEIVE / LOCK / USE / RETURN），便于审计
-- 联调验证 9 项全部通过：3 种券结算金额正确（满 50 减 10 / 8.5 折抵 9 元 / 立减）、重复领取被拦、秒杀限量 2 第 3 人抢光、重复领/DB 已满时 Redis 库存回补、支付后券确认已用、取消后券退回、已用券再下单被拦（"券不可用"）
-
-### 阶段 3：微服务治理 + 搜索 + 候补 ✅（网关统一入口 / 搜索可用 / 候补自动补位 全部联调通过）
-- **Nacos 注册中心**：8 个服务全部注册（gateway/user/trip/order/marketing/payment/notify/assistant），服务间调用改服务名 lb:// 负载均衡（带券下单、支付回调跨服务链路验证通过）
-- **Gateway 统一入口（8000）**：7 条路由全部指向服务名，全局 JWT 鉴权（白名单外必须携带 Bearer token，透传 X-User-Id）、Redis 令牌桶限流（单 IP 20 qps / 突发 40）、统一 401/限流返回格式
-- **ES 行程搜索**：行程发布同步到 Elasticsearch（goshare_trip 索引，出发时间秒级格式），搜索 ES 优先 + 数据库实时余座校准，ES 不可用自动降级 MySQL；提供全量同步运维接口
-- **候补递补**：行程满座后乘客可排队候补（Redis 有序集合按登记时间排序，重复登记幂等）；订单取消 / 超时释放座位后，候补第一位自动生成订单补位（固定幂等键防重复递补）
-- **分库分表（ShardingSphere-JDBC 5.5.0）**：订单表按乘客ID取模路由到 trip_order_0 / trip_order_1（同库分表演示），主键由分片引擎雪花算法生成，未分片表走默认数据源；更新必须携带分片键；老数据已迁移、原表改名 trip_order_legacy 兜底
-- 阶段 3 联调验证：Nacos 服务数 8、网关登录 / 伪造 token 401、限流拦截、ES 搜索（石家庄→北京命中、反向为空、日期过滤）、候补递补（满座登记 → 取消释放 → 自动补位 → 队列清空）、分片路由（乘客ID 2→表0 / 3→表1、雪花主键、跨片查询、支付后状态更新）
-
-### 阶段 4：RocketMQ 延时消息超时释放 + 消费防重复 + JMeter 压测 ✅（验收口径：不超卖 + 有压测报告）
-- **RocketMQ 延时消息超时释放（主链路）**：下单成功后发送 10 分钟延时消息（`GO_SHARE_ORDER` topic、Tag=`ORDER_TIMEOUT`、delayLevel=14 对应 10 分钟档，Keys 携带订单号），到期后消费者监听 Tag 过滤收到消息 → 调 `closeExpiredOrderByNo` 关单（状态 CREATED→EXPIRED + 分片表更新 + DB/Redis 双回补余座 + 退券 + 候补递补）
-- **消费防重复（两道防线）**：① Redis `setIfAbsent("order:timeout:consume:{orderNo}", 1h)` 消费幂等键；② `closeExpiredOrderByNo` 内订单非 CREATED 状态静默跳过（状态机防重复）
-- **定时扫描兜底**：12 分钟定时扫描（比延时消息晚 2 分钟）兜底关单，防止消息丢失或消费失败导致订单永久悬挂（与 MQ 消费共用同一个关闭函数）
-- **JMeter 压测（JMeter 5.6.3，非 GUI 模式）**：
-  - 场景A（不超卖）：50 线程并发直连订单服务 8003 抢 3 个座位 → 全部 HTTP 200，**DB 实际建单 3 单、余座 0、无超卖**（Redis Lua 原子扣减 + DB 条件更新 + 幂等键三重复防线）
-  - 场景B（网关限流）：100 线程并发走网关 8000 → **60 个 429（Too Many Requests）被 Sentinel 限流拒绝**，40 个放行（阈值 20qps/突发 40），放行请求进入业务层后仍受余座防线约束
-  - 压测脚本：`jmeter/jmeter-sceneA-nosellout.jmx`、`jmeter/jmeter-sceneB-gateway-limit.jmx`；完整结论见 `reports/阶段4压测报告.md`
-- 阶段 4 链路验证：下单 → MQ 延时消息发送（日志确认）→ 10 分钟后消费者消费 → 订单 EXPIRED + Redis 消费去重键 + 余座回补 3 → 兜底定时扫描（12 分钟）在消息路径异常时仍可关单（历史验证）
-
-### 阶段 5：AI 出行助手 ✅（A1 语义化搜索与智能撮合 / A2 取消挽留+费用解释 / B1 工单摘要+回复草稿 / 省 token 四关卡 / 天气提醒）- **新增服务**：`go-share-assistant-server`（8007，AI 能力聚合层，LLM 可插拔 mock/http）、`go-share-notify-server`（8006，天气+发车提醒体验项，天气数据源可插拔 mock/高德）
-- **A1 语义化搜索与智能撮合（列表/排序/金额一律代码产出，LLM 不参与生成）**：
-  - NL→结构化：规则模板解析（`NlTripParser`：从X到Y/去Y/回Y/今天/明天/后天/周X/时段 12点 20点/大件/便宜，未识别条件不参与查询）
-  - 两阶段召回排序：ES 动态 DSL 粗排（状态可订+出发时间>now，按条件追加起终点/日期/时段±2h 窗，异常返回空降级 trip `/api/trip/search`）→ CompletableFuture 并行取车主信任分（user 服务）+ 行程备注（trip 服务）→ 细排打分（时间 0.35/余座 0.25/信任 0.25/价格 0.15，大件偏好降权）
-  - 特征解释层：每个候选输出总分 + 命中原因（"为什么推荐这几单"可追溯）
-- **A2 智能取消挽留 + 费用解释（金额不靠 LLM）**：order 侧 `FeeCalculator` 纯 Java 判责（CREATED 未支付无费；距发车 ≥120min 无责全额退；<120min 实付 20% 违约金封顶 50；BigDecimal HALF_UP）→ `POST /api/order/cancel-preview` → assistant 组合同路线替代方案（排除当前行程、未来、limit 3）→ LLM 只生成挽留话术（金额/行程数据代码注入）→ Redis 幂等（同一订单只挽留一次 24h）
-- **B1 工单会话摘要 + 回复草稿**：关键词规则分类（退款/改期/候补/其他）→ 摘要提炼真实会话内容 → 分类模板回复草稿（含订单号可直接发）→ Redis 幂等（摘要只触发一次控成本）
-- **省 token 四关卡（`LlmGateway` 统一网关 + `llm_call_log` 全量记账）**：
-  - 关卡1 答案缓存：`ai:ans:v{dataVersion}:{md5}` TTL 12h（带数据版本号，版本+1 旧答案自动作废）
-  - 关卡2 小模型先答：固定前缀意图（取消收费/违约金/退钱/候补/用券/扣钱/费用 等规则模板）零调用
-  - 关卡3 固定前缀：所有 prompt 强制 `SYSTEM_PREFIX` 开头（厂商缓存复用 + 防注入）
-  - 关卡4 夜间预生成：`@Scheduled` 凌晨 3 点预生成 5 条热点问答入缓存；每次处理写 llm_call_log（biz_type/model/token/耗时/cache_hit/gate_skipped），`GET /api/assistant/llm-stats` 出统计
-- **天气提醒体验项（可插拔 key 的 mock 设计）**：`GET /api/notify/weather?city=`（石家庄/北京/邯郸/天津/保定内置演示数据）、`GET /api/notify/trip-reminder?orderNo=`（订单行程 + 出发地天气组装发车提醒文案）
-- **新表**：`llm_call_log`（LLM 记账）、`work_order`/`work_order_message`（工单与会话）、`user.trust_score`（撮合排序特征，默认 5.0）
-- **阶段 5 联调验证（12 项）**：A1（"周五18点从石家庄去邯郸，能带大件"→ 结构化回显+大件优先排序+解释；"明天去北京"→ 单条件召回）、chat 缓存命中（第 2 次 fromCache=true）、规则拦截记账（llm-stats 命中率/拦截率）、A2（PAID 无责全额退 / CREATED 无扣款 + 替代方案 + 话术 + 幂等 alreadyRetained）、B1（退款分类+摘要+草稿+firstTime 幂等）、天气 + 发车提醒
-- **单测 18 个全绿**：`FeeCalculatorTest`（判责时间窗边界 120/119 分钟、20% 违约金、50 封顶、CREATED/IN_SERVICE/CANCELLED）、`NlTripParserTest`（golden 用例）、`MatchRerankerTest`（权重排序/大件降权/余座优先）、`RuleAnswerProviderTest`（规则命中）
-
-### 阶段 6：前端三端 ✅（三主题 token 体系 / 14 个 g-ui 组件 / H5 Glass 8 页 / 后台 Minimal / 大屏 Aurora / Storybook / 20 条精致度验收）
-- **工程**：`web/` Vue3 + TS strict + Vite5 三入口（main/admin/screen 多页）+ Pinia + Router + axios，`/api` dev proxy → 网关 8000；H5 主包 gzip 33KB（预算 180KB）
-- **双级 design token**：L1 基础（色/灰阶/字号七档/间距 8pt/圆角 8-12-20-28/阴影三级/动效）→ L2 语义三主题（Glass 深色玻璃/ Minimal 浅灰白卡无模糊 / Aurora 深色发光），根节点 `data-theme` 一键切换，页面禁止裸样式值
-- **14 个 g-ui 组件**（统一 `src/g-ui/index.ts` 出口）：GButton 三型四态（按下 scale.97/禁用/加载 spinner）、GCard、GInput（44/48、聚焦 2px 品牌描边、error/disabled）、GNavBar（sticky+返回）、GTabBar（内置线性 SVG 图标一套）、GSheet（320ms ease-out-expo 抽屉）、GDialog、GToast（2.5s 自动消失）、GSkeleton（微光 1.6s 唯一循环动画）、GEmpty/GError（空/错三态）、GTripCard（热度三色条+信任分）、GCouponCard（虚线撕口+三态+已用印章）、GChatBubble（用户渐变实色/助手玻璃）
-- **H5 8 页（Glass）**：首页/口语搜索（A1 语义搜索→结构化回显+解释层）/行程详情+下单/订单/收银台（等宽倒计时）/券包（三态）/我的/AI 助手（四关卡标注：缓存命中/规则小模型）；全部接真实接口
-- **管理后台（Minimal）**：行程管理表（真实数据）/AI 助手测试（可观察缓存命中）/帮助；**数据大屏（Aurora）**：ECharts 价格分布（真实行程）/信任分布/LLM 调用缓存命中率（真实 llm-stats）
-- **工程化**：Vitest 20 用例全绿（金额/时间/倒计时 utils + 组件冒烟四态/三态）；Storybook 14 组件全状态预览；`docs/GoShare-前端-阶段6验收.md` 逐条打勾（20 条中 19 条达标，LCP 留待浏览器实测；Stylelint 裸样式门禁 + Playwright 截图对比归阶段 7）
-- **阶段 6 联调验证**：经 vite proxy 登录→搜索→语义搜索（top 0.94+reasons）→规则小模型拦截→下单→支付（CREATED→SUCCESS）→领券（幂等拦截）→llm-stats（缓存命中率 46.7%/拦截率 20%）
-
-## 阶段 1 接口速查
-
-| 服务 | 接口 | 说明 |
-|---|---|---|
-| user | POST /api/user/register | 注册（直接返回 token） |
-| user | POST /api/user/login | 登录 |
-| user | GET /api/user/me | 当前用户（需 Bearer token） |
-| user | POST /api/user/real-name-verify | 实名认证 |
-| user | POST /api/driver/certification/apply | 车主认证申请 |
-| user | POST /api/driver/certification/audit | 认证审核（通过后角色变 DRIVER） |
-| trip | POST /api/trip/publish | 发布行程（仅车主） |
-| trip | GET /api/trip/search?fromCity=&toCity=&departDate= | 搜索行程 |
-| trip | GET /api/trip/{tripId} | 行程详情 |
-| trip | GET /api/trip/mine | 我发布的行程 |
-| order | POST /api/order/create | 下单（需幂等键） |
-| order | POST /api/order/cancel | 取消（回补库存） |
-| order | POST /api/order/pay-callback | 支付回调（内部，幂等） |
-| order | GET /api/order/{orderNo} | 订单详情 |
-| order | GET /api/order/mine | 我的订单 |
-| payment | POST /api/payment/pay | 发起模拟支付 |
-| payment | GET /api/payment/{paymentNo} | 支付结果 |
-
-## 阶段 2 接口速查
-
-| 服务 | 接口 | 说明 |
-|---|---|---|
-| marketing | POST /api/coupon/template/create | 创建券模板（type: FULL_REDUCTION / DISCOUNT / CASH） |
-| marketing | GET /api/coupon/template/list | 券模板列表 |
-| marketing | POST /api/coupon/receive | 领券 / 秒杀抢券（body: templateId） |
-| marketing | GET /api/coupon/mine | 我的券（可按 status 筛选：0未用 1已用 2过期 3锁定） |
-| marketing | POST /api/coupon/settle | 用券结算（内部：锁定券 + 算抵扣） |
-| marketing | POST /api/coupon/confirm | 确认用券（内部：支付成功后调用，幂等） |
-| marketing | POST /api/coupon/return | 退券（内部：取消/超时/下单失败调用，幂等） |
-| order | POST /api/order/create | 下单（body 可带 couponId，锁定券并结算抵扣） |
-
-注：coupon_id 字段通过 `sql/02-coupon-schema.sql` 末尾动态 ALTER 添加（MySQL 8 兼容写法）。
-
-## 阶段 3 接口速查
-
-| 服务 | 接口 | 说明 |
-|---|---|---|
-| gateway | 所有 /api/** | 统一入口 8000：JWT 鉴权 + 限流后转发到各服务 |
-| trip | POST /api/trip/es-sync | ES 全量同步行程（运维接口） |
-| order | POST /api/order/waitlist | 候补登记（行程满座时排队，body: tripId） |
-| order | POST /api/order/waitlist/leave | 退出候补（body: tripId） |
-
-注：订单表分片脚本见 `sql/03-sharding-schema.sql`（建分片表 + 数据迁移 + 老表改名兜底），分片规则在 `ShardingDataSourceConfig.java`（Java API 手动装配，5.3+ 无独立 Starter）。
-
-## Git 提交规范（中文）
-
-所有提交信息使用中文，格式为 `类型(模块)：中文描述`：
-
-| 类型 | 含义 | 示例 |
-|---|---|---|
-| feat | 新功能 | `feat(订单)：新增下单占座接口` |
-| fix | 修复缺陷 | `fix(行程)：修复座位扣减并发问题` |
-| docs | 文档 | `docs(方案)：更新技术清单到 v2.0` |
-| test | 测试 | `test(订单)：补充状态机单测` |
-| refactor | 重构 | `refactor(券)：抽取结算责任链` |
-| chore | 杂项 | `chore(工程)：升级依赖版本` |
-
-## 文件纪律
-
-- 所有生成物放在 `GoShare` 目录内；临时产物放 `_work/`，用完即清
-- 清理：运行 `scripts/clean.ps1`（清 target / 日志 / 临时目录，可带 `-DockerDown` 连容器一起停）
+仅用于学习与技术交流，请勿用于商业用途；演示数据均为虚构。
