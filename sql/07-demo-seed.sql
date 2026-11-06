@@ -27,3 +27,32 @@ ON DUPLICATE KEY UPDATE
   `driver_verified` = VALUES(`driver_verified`),
   `real_name_verified` = VALUES(`real_name_verified`),
   `status` = VALUES(`status`);
+
+-- ------------------------------------------------------------
+-- 券模板种子（E2E 券包用例 + 演示需要）
+-- 用 NOW() 生成有效期，保证全新环境里券永远是"可领且在有效期内"；
+-- 按 template_name 幂等（同名只保留一条）。
+-- ------------------------------------------------------------
+INSERT INTO `coupon_template`
+  (`template_name`, `type`, `threshold`, `discount_value`, `total_count`, `received_count`,
+   `start_time`, `end_time`, `expire_days`, `status`, `remark`)
+SELECT '新客满50减10', 'FULL_REDUCTION', 50.00, 10.00, 1000, 0,
+       NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY), 30, 0, '演示券模板'
+FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `coupon_template` WHERE `template_name` = '新客满50减10');
+
+INSERT INTO `coupon_template`
+  (`template_name`, `type`, `threshold`, `discount_value`, `total_count`, `received_count`,
+   `start_time`, `end_time`, `expire_days`, `status`, `remark`)
+SELECT '拼车8.5折', 'DISCOUNT', 0.00, 0.85, 1000, 0,
+       NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY), 30, 0, '演示券模板'
+FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `coupon_template` WHERE `template_name` = '拼车8.5折');
+
+INSERT INTO `coupon_template`
+  (`template_name`, `type`, `threshold`, `discount_value`, `total_count`, `received_count`,
+   `start_time`, `end_time`, `expire_days`, `status`, `remark`)
+SELECT '周末满80减15', 'FULL_REDUCTION', 80.00, 15.00, 500, 0,
+       NOW(), DATE_ADD(NOW(), INTERVAL 30 DAY), 30, 0, '演示券模板'
+FROM DUAL
+WHERE NOT EXISTS (SELECT 1 FROM `coupon_template` WHERE `template_name` = '周末满80减15');
