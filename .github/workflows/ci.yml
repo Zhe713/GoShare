@@ -73,9 +73,12 @@ jobs:
 
       - name: 等待中间件就绪（MySQL 建表 + Nacos 可注册）
         run: |
-          for i in $(seq 1 60); do
-            if docker exec goshare-mysql mysqladmin ping -uroot -proot123 --silent 2>/dev/null; then
-              echo "mysql ready"; break
+          # 不能用 mysqladmin ping 判断：初始化脚本执行期间 server 就已经能 ping 通，
+          # 此时建表还没跑完，服务起来会 500。要等"表 + 种子数据"真的可用。
+          for i in $(seq 1 90); do
+            if docker exec goshare-mysql mysql -uroot -proot123 -N -e \
+                 "SELECT COUNT(*) FROM goshare.user WHERE phone='13900139000'" 2>/dev/null | grep -q '^1$'; then
+              echo "mysql schema + seed ready"; break
             fi
             sleep 2
           done
@@ -100,6 +103,9 @@ jobs:
             done
           done
           echo "backend ports ready"
+          # 端口通 ≠ 已注册到 Nacos：再等 20s 让 8 个实例完成注册，避免网关 503
+          sleep 20
+          echo "wait for nacos registration done"
       - name: 安装前端依赖
         run: npm ci
         working-directory: web
@@ -110,6 +116,21 @@ jobs:
       - name: 运行 E2E 主链路
         run: npx playwright test
         working-directory: web
+      - name: 失败时输出后端服务日志（定位 E2E 500 的现场）
+        if: failure()
+        run: |
+          for f in logs-*.txt; do
+            echo "===== $f ====="
+            tail -80 "$f" || true
+          done
+
+      - name: 上传后端服务日志
+        if: always()
+        uses: actions/upload-artifact@v4
+        with:
+          name: backend-logs
+          path: logs-*.txt
+
       - name: 上传 E2E 报告
         if: always()
         uses: actions/upload-artifact@v4
