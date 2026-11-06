@@ -20,7 +20,7 @@ class LlmSecretCryptoTest {
 
     @Test
     void roundTripKeepsPlaintext() {
-        String plain = "sk-ws-demo-key-abcdefg";
+        String plain = "test-fixture-key-not-a-real-secret";
         String enc = LlmSecretCrypto.encrypt(plain, MASTER);
 
         assertTrue(enc.startsWith(LlmSecretCrypto.PREFIX));

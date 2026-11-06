@@ -35,7 +35,7 @@ goshare:
   # 与其他服务保持一致的 JWT 密钥：启动类需扫描 com.goshare 才能共享 common 的
   # 统一返回/异常处理，而 common 的 JwtUtil 依赖此配置，缺失会导致启动失败
   jwt:
-    secret: go-share-demo-jwt-secret-please-change-in-prod-0123456789
+    secret: ${GOSHARE_JWT_SECRET:go-share-demo-jwt-secret-please-change-in-prod-0123456789}
     expire-hours: 24
   weather:
     # 天气数据源：http（真实数据·Open-Meteo 免费无 Key）| mock（内置演示数据，默认零外部依赖）

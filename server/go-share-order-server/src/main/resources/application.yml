@@ -32,7 +32,7 @@ mybatis-plus:
 # 项目自定义配置
 goshare:
   jwt:
-    secret: go-share-demo-jwt-secret-please-change-in-prod-0123456789
+    secret: ${GOSHARE_JWT_SECRET:go-share-demo-jwt-secret-please-change-in-prod-0123456789}
     expire-hours: 24
   # 分库分表配置（ShardingSphere-JDBC 手动装配，逻辑表 trip_order 按乘客ID取模分 2 片）
   sharding:

@@ -59,7 +59,7 @@ spring:
 # 项目自定义配置（与各服务一致的 JWT 密钥，网关统一校验登录）
 goshare:
   jwt:
-    secret: go-share-demo-jwt-secret-please-change-in-prod-0123456789
+    secret: ${GOSHARE_JWT_SECRET:go-share-demo-jwt-secret-please-change-in-prod-0123456789}
     expire-hours: 24
 
 management:

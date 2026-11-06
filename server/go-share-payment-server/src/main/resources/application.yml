@@ -25,7 +25,7 @@ mybatis-plus:
 # 项目自定义配置
 goshare:
   jwt:
-    secret: go-share-demo-jwt-secret-please-change-in-prod-0123456789
+    secret: ${GOSHARE_JWT_SECRET:go-share-demo-jwt-secret-please-change-in-prod-0123456789}
     expire-hours: 24
   payment:
     # 订单服务地址（Nacos 服务名 + 负载均衡，支付回调目标）

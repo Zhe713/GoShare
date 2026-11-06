@@ -242,6 +242,25 @@ export GOSHARE_LLM_HTTP_URL=https://dashscope.aliyuncs.com/compatible-mode/v1/ch
 > 优先级：环境变量 > 本地加密文件 > `application.yml` 默认值（mock）。
 > 安全边界说明：本地加密防的是"明文被顺手拷走 / 误提交"，不是对抗本机管理员；生产请用 KMS。
 
+### 密钥与配置安全
+
+仓库里**没有任何真实密钥**，可以公开克隆运行：
+
+| 配置 | 仓库默认值 | 说明 |
+|---|---|---|
+| `goshare.llm.api-key` | 空 + `mode: mock` | 接真模型用 `node scripts/llm-key.mjs set`（本地 AES-256-GCM 加密）或环境变量 |
+| `goshare.jwt.secret` | `...please-change-in-prod...` | **部署前必须**设 `GOSHARE_JWT_SECRET`，否则知道仓库的人都能自己签 token |
+| MySQL / Redis 密码 | `root123` / 无 | 仅本地 docker-compose 用，不要暴露到公网 |
+| 内部接口 `X-Internal-Token` | 由配置注入 | 网关已禁止公网访问 `@InternalApi` 路径，服务端再校验一次 |
+
+自查命令（改完配置或怀疑泄露时跑一遍）：
+
+```bash
+git grep -nE "sk-[a-zA-Z0-9]{8,}" $(git rev-list --all) | head    # 历史里有没有像密钥的字符串
+git log --all -S"你的密钥片段" --oneline                          # 指定字符串出现过哪些提交
+```
+
+
 ---
 
 ## 界面预览
